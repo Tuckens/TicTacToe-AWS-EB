@@ -1,3 +1,5 @@
+package main.java.com.tictactoe.model;
+
 public class Board {
     private final char[][] cells = new char[3][3];
 

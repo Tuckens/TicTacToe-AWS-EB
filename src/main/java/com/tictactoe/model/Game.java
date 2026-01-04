@@ -1,3 +1,5 @@
+package main.java.com.tictactoe.model;
+
 public class Game {
     private final Board board = new Board();
     private Player currentPlayer = Player.X;
