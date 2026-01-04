@@ -5,25 +5,25 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- Use Spring Boot's default configuration -->
+
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>3.2.0</version>
     </parent>
 
-    <!-- Your project info -->
+
     <groupId>com.tictactoe</groupId>
     <artifactId>tictactoe-api</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <!-- Java version -->
+
     <properties>
-        <java.version>22</java.version>
+        <java.version>21</java.version>
     </properties>
 
-    <!-- Libraries you need -->
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -31,7 +31,7 @@
         </dependency>
     </dependencies>
 
-    <!-- Build configuration -->
+
     <build>
         <plugins>
             <plugin>
