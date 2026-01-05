@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 3em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .game-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 120px);
+            grid-template-rows: repeat(3, 120px);
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .cell {
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 10px;
+            font-size: 48px;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .cell:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 1);
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+        }
+
+        .cell:disabled {
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+        .cell.x {
+            color: #667eea;
+        }
+
+        .cell.o {
+            color: #764ba2;
+        }
+
+        #status {
+            font-size: 1.5em;
+            margin: 20px 0;
+            min-height: 40px;
+            text-align: center;
+        }
+
+        button#newGame {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        button#newGame:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .winner {
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+<h1>🎮 Tic Tac Toe</h1>
+
+<div class="game-container">
+    <div id="status">Click "New Game" to start!</div>
+
+    <div class="board" id="board">
+        <button class="cell" data-row="0" data-col="0"></button>
+        <button class="cell" data-row="0" data-col="1"></button>
+        <button class="cell" data-row="0" data-col="2"></button>
+        <button class="cell" data-row="1" data-col="0"></button>
+        <button class="cell" data-row="1" data-col="1"></button>
+        <button class="cell" data-row="1" data-col="2"></button>
+        <button class="cell" data-row="2" data-col="0"></button>
+        <button class="cell" data-row="2" data-col="1"></button>
+        <button class="cell" data-row="2" data-col="2"></button>
+    </div>
+
+    <button id="newGame">New Game</button>
+</div>
+
+<script>
+    const API_URL = 'http://localhost:8081/api/game';
+    let gameId = null;
+
+    // Get DOM elements
+    const board = document.getElementById('board');
+    const cells = document.querySelectorAll('.cell');
+    const status = document.getElementById('status');
+    const newGameBtn = document.getElementById('newGame');
+
+    // Start new game
+    async function newGame() {
+        try {
+            const response = await fetch(`${API_URL}/new`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            gameId = data.gameId;
+            renderBoard(data.board);
+            updateStatus(data.status, data.currentPlayer);
+            enableBoard();
+        } catch (error) {
+            status.textContent = '❌ Error: Could not connect to server';
+            console.error(error);
+        }
+    }
+
+    // Make a move
+    async function makeMove(row, col) {
+        if (!gameId) return;
+
+        try {
+            const response = await fetch(`${API_URL}/${gameId}/move`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ row, column: col })
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                status.textContent = '❌ ' + data.error;
+                return;
+            }
+
+            renderBoard(data.board);
+            updateStatus(data.status, data.currentPlayer);
+
+            if (data.status !== 'IN_PROGRESS') {
+                disableBoard();
+            }
+        } catch (error) {
+            status.textContent = '❌ Error making move';
+            console.error(error);
+        }
+    }
+
+    // Render the board
