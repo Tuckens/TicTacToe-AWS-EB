@@ -1,1 +1,1 @@
-web: java -jar tictactoe-api-1.0.0.jar
+web: java -jar target/TicTacToe-0.0.1-SNAPSHOT.jar
