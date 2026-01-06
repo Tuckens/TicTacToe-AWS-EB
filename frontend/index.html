@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
     <title>Tic Tac Toe</title>
     <style>
         body {
@@ -77,33 +81,6 @@
             text-align: center;
         }
 
-        button#newGame {
-            background: white;
-            color: #667eea;
-            border: none;
-            padding: 15px 40px;
-            font-size: 1.2em;
-            font-weight: bold;
-            border-radius: 50px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-
-        button#newGame:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-        }
-
-        .winner {
-            animation: pulse 0.5s ease-in-out;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-
 
 .switch {
     position: relative;
@@ -149,6 +126,34 @@ input:checked + .slider {
 input:checked + .slider:before {
     transform: translateX(26px);
 }
+button#newGame, button#inviteFriend {
+    width: 100%; /* Makes both buttons the same width */
+    max-width: 250px; /* Keeps them from getting too wide */
+    border: none;
+    padding: 15px 0; /* Vertical padding */
+    font-size: 1.2em;
+    font-weight: bold;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    margin-left: 0; /* Fixes the "off to the right" issue */
+}
+
+button#newGame {
+    background: white;
+    color: #667eea;
+}
+
+button#inviteFriend {
+    background: #48bb78;
+    color: white;
+}
+
+button#newGame:hover, button#inviteFriend:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
 
 
     </style>
@@ -158,14 +163,6 @@ input:checked + .slider:before {
 
 <div class="game-container">
     <div id="status">Click "New Game" to start!</div>
-
-    <div style="margin: 15px 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
-        <span>Play against AI:</span>
-        <label class="switch">
-            <input type="checkbox" id="aiToggle" checked>
-            <span class="slider"></span>
-        </label>
-    </div>
 
     <div class="board" id="board">
         <button class="cell" data-row="0" data-col="0"></button>
@@ -179,125 +176,147 @@ input:checked + .slider:before {
         <button class="cell" data-row="2" data-col="2"></button>
     </div>
 
-    <button id="newGame">New Game</button>
+    <div id="aiControl" style="margin: 10px 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <span>Play against AI:</span>
+        <label class="switch">
+            <input type="checkbox" id="aiToggle" checked>
+            <span class="slider"></span>
+        </label>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: center;">
+        <button id="newGame">New Game</button>
+        <button id="inviteFriend">Invite Friend</button>
+    </div>
 </div>
 
 <script>
-    const API_URL = 'http://tictactoe-env.eba-hir2yshp.eu-central-1.elasticbeanstalk.com/api/game';
-    let gameId = null;
+    // Remove /api/game from the base URL so we can use it for WebSockets too
+    const BASE_URL = 'http://tictactoe-env.eba-hir2yshp.eu-central-1.elasticbeanstalk.com';
+    const API_URL = `${BASE_URL}/api/game`;
 
-    // Get DOM elements
-    const board = document.getElementById('board');
+    let gameId = null;
+    let stompClient = null;
+    let isMultiplayer = false;
+
     const cells = document.querySelectorAll('.cell');
     const status = document.getElementById('status');
     const newGameBtn = document.getElementById('newGame');
+    const inviteBtn = document.getElementById('inviteFriend');
+    const aiControl = document.getElementById('aiControl');
 
-   //Starting a new game
+    // --- WEB SOCKET LOGIC ---
+    function connectWebSocket(id) {
+        const socket = new SockJS(`${BASE_URL}/ws-tictactoe`);
+        stompClient = Stomp.over(socket);
+        stompClient.debug = null;
+
+        stompClient.connect({}, () => {
+            isMultiplayer = true;
+            aiControl.style.display = 'none'; // Hide AI toggle in multiplayer
+            status.textContent = "Live Room Connected!";
+
+            stompClient.subscribe(`/topic/game/${id}`, (message) => {
+                const data = JSON.parse(message.body);
+                renderBoard(data.board);
+                updateStatus(data.status, data.currentPlayer);
+                if (data.status !== 'IN_PROGRESS') disableBoard();
+            });
+        });
+    }
+
     async function newGame() {
         const isAiMode = document.getElementById('aiToggle').checked;
-
+        isMultiplayer = false;
         try {
-            const response = await fetch(`${API_URL}/new?aiMode=${isAiMode}`, {
-                method: 'POST'
-            });
+            const response = await fetch(`${API_URL}/new?aiMode=${isAiMode}`, { method: 'POST' });
             const data = await response.json();
-
             gameId = data.gameId;
             renderBoard(data.board);
             updateStatus(data.status, data.currentPlayer);
             enableBoard();
         } catch (error) {
-            status.textContent = '❌ Error: Could not connect to server';
-            console.error(error);
+            status.textContent = '❌ Server Connection Error';
         }
     }
 
-    // Make a move
     async function makeMove(row, col) {
         if (!gameId) return;
 
-        try {
-            const response = await fetch(`${API_URL}/${gameId}/move`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ row, column: col })
-            });
-
-            const data = await response.json();
-
-            if (data.error) {
-                status.textContent = '❌ ' + data.error;
-                return;
+        if (isMultiplayer && stompClient && stompClient.connected) {
+            // SEND MOVE VIA WEBSOCKET
+            stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({ row, column: col }));
+        } else {
+            // SEND MOVE VIA REST
+            try {
+                const response = await fetch(`${API_URL}/${gameId}/move`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ row, column: col })
+                });
+                const data = await response.json();
+                renderBoard(data.board);
+                updateStatus(data.status, data.currentPlayer);
+                if (data.status !== 'IN_PROGRESS') disableBoard();
+            } catch (error) {
+                status.textContent = '❌ Move Error';
             }
-
-            renderBoard(data.board);
-            updateStatus(data.status, data.currentPlayer);
-
-            if (data.status !== 'IN_PROGRESS') {
-                disableBoard();
-            }
-        } catch (error) {
-            status.textContent = '❌ Error making move';
-            console.error(error);
         }
     }
 
+    // Invite Friend Logic
+    inviteBtn.addEventListener('click', async () => {
+        await newGame(); // Start a human game
+        const inviteUrl = `${window.location.origin}${window.location.pathname}?gameId=${gameId}`;
+        navigator.clipboard.writeText(inviteUrl);
+        alert("Link Copied! Send it to a friend.");
+        connectWebSocket(gameId);
+    });
 
-// Render the board
-function renderBoard(board) {
-cells.forEach((cell, index) => {
-const row = Math.floor(index / 3);
-const col = index % 3;
-const value = board[row][col];
+    // Check for Join Link
+    window.onload = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const idFromUrl = urlParams.get('gameId');
+        if (idFromUrl) {
+            gameId = idFromUrl;
+            connectWebSocket(gameId);
+            enableBoard();
+        }
+    };
 
-cell.textContent = value === ' ' ? '' : value;
-cell.className = 'cell';
+    function renderBoard(boardData) {
+        cells.forEach((cell, index) => {
+            const r = Math.floor(index / 3);
+            const c = index % 3;
+            const value = boardData[r][c];
+            cell.textContent = value === ' ' ? '' : value;
+            cell.className = 'cell' + (value === 'X' ? ' x' : value === 'O' ? ' o' : '');
+        });
+    }
 
-if (value === 'X') cell.classList.add('x');
-if (value === 'O') cell.classList.add('o');
-});
-}
+    function updateStatus(gameStatus, currentPlayer) {
+        if (gameStatus.includes('WON')) {
+            status.textContent = `🎉 ${gameStatus.replace('_', ' ')}!`;
+            status.classList.add('winner');
+        } else if (gameStatus === 'DRAW') {
+            status.textContent = "🤝 It's a Draw!";
+        } else {
+            status.textContent = `${currentPlayer}'s turn`;
+            status.classList.remove('winner');
+        }
+    }
 
-// Update status message
-function updateStatus(gameStatus, currentPlayer) {
-if (gameStatus === 'X_WON') {
-status.textContent = '🎉 X Wins!';
-status.classList.add('winner');
-} else if (gameStatus === 'O_WON') {
-status.textContent = '🎉 O Wins!';
-status.classList.add('winner');
-} else if (gameStatus === 'DRAW') {
-status.textContent = '🤝 It\'s a Draw!';
-} else {
-status.textContent = `${currentPlayer}'s turn`;
-status.classList.remove('winner');
-}
-}
+    function enableBoard() { cells.forEach(c => c.disabled = false); }
+    function disableBoard() { cells.forEach(c => c.disabled = true); }
 
-// Enable/disable board
-function enableBoard() {
-cells.forEach(cell => cell.disabled = false);
-}
+    cells.forEach(cell => {
+        cell.addEventListener('click', () => {
+            makeMove(parseInt(cell.dataset.row), parseInt(cell.dataset.col));
+        });
+    });
 
-function disableBoard() {
-cells.forEach(cell => cell.disabled = true);
-}
-
-// Event listeners
-cells.forEach(cell => {
-cell.addEventListener('click', () => {
-const row = parseInt(cell.dataset.row);
-const col = parseInt(cell.dataset.col);
-makeMove(row, col);
-});
-});
-
-newGameBtn.addEventListener('click', newGame);
-
-// Disable board initially
-disableBoard();
+    newGameBtn.addEventListener('click', newGame);
+    disableBoard();
 </script>
 </body>
 </html>
