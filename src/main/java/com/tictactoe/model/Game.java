@@ -10,22 +10,25 @@ public class Game {
 
 
     public boolean makeMove(int row, int column) {
-        if (gameStatus != GameStatus.IN_PROGRESS) return false;
-
-        boolean success = board.place(row, column, currentPlayer);
-
-        if (!success) return false;
-        else {
-            board.print();
-            switchPlayer();
+        if (gameStatus != GameStatus.IN_PROGRESS || !board.place(row, column, currentPlayer)) {
+            return false;
         }
-        checkWinner();
 
-        if(isAIMode && currentPlayer == aiPlayer) {
+        processTurn();
+
+        if(gameStatus == GameStatus.IN_PROGRESS && isAIMode && currentPlayer == aiPlayer) {
             makeAIMove();
         }
         return true;
 
+    }
+
+    private void processTurn() {
+        board.print();
+        checkWinner();
+        if(gameStatus == GameStatus.IN_PROGRESS) {
+            switchPlayer();
+        }
     }
 
     private void checkWinner() {
@@ -119,10 +122,7 @@ public class Game {
         AIPlayer.Move aiMove = ai.getBestMove(board.getCells(), aiPlayer);
         if(aiMove!= null) {
             board.place(aiMove.row, aiMove.col, currentPlayer);
-            checkWinner();
-            if(gameStatus == GameStatus.IN_PROGRESS) {
-                switchPlayer();
-            }
+            processTurn();
         }
     }
 
