@@ -4,6 +4,9 @@ public class Game {
     private final Board board = new Board();
     private Player currentPlayer = Player.X;
     private GameStatus gameStatus = GameStatus.IN_PROGRESS;
+    private boolean isAIMode = false;
+    private Player aiPlayer = Player.O;
+    private AIPlayer ai = new AIPlayer();
 
 
     public boolean makeMove(int row, int column) {
@@ -17,6 +20,10 @@ public class Game {
             switchPlayer();
         }
         checkWinner();
+
+        if(isAIMode && currentPlayer == aiPlayer) {
+            makeAIMove();
+        }
         return true;
 
     }
@@ -95,6 +102,29 @@ public class Game {
         return currentPlayer;
     }
 
+    public Game() {
+        this(false);
+    }
+
+    public Game(boolean aiMode) {
+        this.isAIMode = aiMode;
+    }
+
+
+    public boolean isAiMode() {
+        return isAIMode;
+    }
+
+    private void makeAIMove() {
+        AIPlayer.Move aiMove = ai.getBestMove(board.getCells(), aiPlayer);
+        if(aiMove!= null) {
+            board.place(aiMove.row, aiMove.col, currentPlayer);
+            checkWinner();
+            if(gameStatus == GameStatus.IN_PROGRESS) {
+                switchPlayer();
+            }
+        }
+    }
 
 }
 

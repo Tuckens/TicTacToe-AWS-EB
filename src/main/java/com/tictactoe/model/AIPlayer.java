@@ -94,7 +94,6 @@ public class AIPlayer {
                         int score = minimax(board, depth + 1, true);
                         board[r][c] = ' ';
                         bestScore = Math.min(score, bestScore);
-                    }
                 }
             }
             return bestScore;
