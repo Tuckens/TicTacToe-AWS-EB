@@ -35,7 +35,11 @@ public class LiveGameController {
                         game.getBoard().getCells(),
                         game.getGameStatus(),
                         game.getCurrentPlayer().toString(),
-                        null
+                        null, // error
+                        game.isPlayerXPresent(),
+                        game.isPlayerOPresent(),
+                        game.isPlayerXReady(),
+                        game.isPlayerOReady()
                 );
                 messagingTemplate.convertAndSend("/topic/game/" + gameId, response);
             }

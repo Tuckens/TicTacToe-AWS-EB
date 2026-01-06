@@ -33,6 +33,7 @@
             border-radius: 20px;
             backdrop-filter: blur(10px);
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            text-align: center;
         }
 
         .board {
@@ -66,102 +67,39 @@
             opacity: 0.8;
         }
 
-        .cell.x {
-            color: #667eea;
+        .cell.x { color: #667eea; }
+        .cell.o { color: #764ba2; }
+
+        #status { font-size: 1.5em; margin: 20px 0; min-height: 40px; }
+        #identity { font-size: 1em; color: #48bb78; margin-bottom: 10px; font-weight: bold; }
+
+        .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.3); transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #764ba2; }
+        input:checked + .slider:before { transform: translateX(26px); }
+
+        .btn-group { display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: center; }
+
+        button#newGame, button#inviteBtn, button#rematchBtn {
+            width: 100%; max-width: 250px; border: none; padding: 15px 0;
+            font-size: 1.2em; font-weight: bold; border-radius: 50px; cursor: pointer; transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
 
-        .cell.o {
-            color: #764ba2;
-        }
+        button#newGame { background: white; color: #667eea; }
+        button#inviteBtn { background: #48bb78; color: white; }
+        button#rematchBtn { background: #ed8936; color: white; display: none; }
 
-        #status {
-            font-size: 1.5em;
-            margin: 20px 0;
-            min-height: 40px;
-            text-align: center;
-        }
-
-
-.switch {
-    position: relative;
-    display: inline-block;
-    width: 50px;
-    height: 24px;
-}
-
-.switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(255,255,255,0.3);
-    transition: .4s;
-    border-radius: 24px;
-}
-
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 18px;
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: .4s;
-    border-radius: 50%;
-}
-
-input:checked + .slider {
-    background-color: #764ba2;
-}
-
-input:checked + .slider:before {
-    transform: translateX(26px);
-}
-button#newGame, button#inviteFriend {
-    width: 100%; /* Makes both buttons the same width */
-    max-width: 250px; /* Keeps them from getting too wide */
-    border: none;
-    padding: 15px 0; /* Vertical padding */
-    font-size: 1.2em;
-    font-weight: bold;
-    border-radius: 50px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    margin-left: 0; /* Fixes the "off to the right" issue */
-}
-
-button#newGame {
-    background: white;
-    color: #667eea;
-}
-
-button#inviteFriend {
-    background: #48bb78;
-    color: white;
-}
-
-button#newGame:hover, button#inviteFriend:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-}
-
-
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
     </style>
 </head>
 <body>
 <h1>🎮 Tic Tac Toe</h1>
 
 <div class="game-container">
+    <div id="identity"></div>
     <div id="status">Click "New Game" to start!</div>
 
     <div class="board" id="board">
@@ -184,139 +122,164 @@ button#newGame:hover, button#inviteFriend:hover {
         </label>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: center;">
+    <div class="btn-group">
         <button id="newGame">New Game</button>
-        <button id="inviteFriend">Invite Friend</button>
+        <button id="inviteBtn">Invite Friend</button>
+        <button id="rematchBtn">Request Rematch (0/2)</button>
     </div>
 </div>
 
 <script>
-    // Remove /api/game from the base URL so we can use it for WebSockets too
     const BASE_URL = 'http://tictactoe-env.eba-hir2yshp.eu-central-1.elasticbeanstalk.com';
     const API_URL = `${BASE_URL}/api/game`;
 
+    const sounds = {
+        move: new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
+        win: new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'),
+        join: new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3')
+    };
+
     let gameId = null;
     let stompClient = null;
-    let isMultiplayer = false;
+    let playerRole = null;
+    let opponentJoined = false;
+    let currentTurn = 'X';
 
     const cells = document.querySelectorAll('.cell');
-    const status = document.getElementById('status');
-    const newGameBtn = document.getElementById('newGame');
-    const inviteBtn = document.getElementById('inviteFriend');
+    const statusText = document.getElementById('status');
+    const identityText = document.getElementById('identity');
+    const rematchBtn = document.getElementById('rematchBtn');
     const aiControl = document.getElementById('aiControl');
 
-    // --- WEB SOCKET LOGIC ---
     function connectWebSocket(id) {
         const socket = new SockJS(`${BASE_URL}/ws-tictactoe`);
         stompClient = Stomp.over(socket);
         stompClient.debug = null;
 
         stompClient.connect({}, () => {
-            isMultiplayer = true;
-            aiControl.style.display = 'none'; // Hide AI toggle in multiplayer
-            status.textContent = "Live Room Connected!";
+            // Join message sends player role so backend knows who's here
+            stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
 
             stompClient.subscribe(`/topic/game/${id}`, (message) => {
                 const data = JSON.parse(message.body);
+
+                if (data.playerXPresent && data.playerOPresent && !opponentJoined) {
+                    opponentJoined = true;
+                    sounds.join.play();
+                }
+
+                currentTurn = data.currentPlayer;
                 renderBoard(data.board);
-                updateStatus(data.status, data.currentPlayer);
-                if (data.status !== 'IN_PROGRESS') disableBoard();
+                updateUI(data);
             });
         });
     }
 
-    async function newGame() {
-        const isAiMode = document.getElementById('aiToggle').checked;
-        isMultiplayer = false;
+    async function newGame(forceAiOff = false) {
+        const aiOn = forceAiOff ? false : document.getElementById('aiToggle').checked;
         try {
-            const response = await fetch(`${API_URL}/new?aiMode=${isAiMode}`, { method: 'POST' });
-            const data = await response.json();
+            const res = await fetch(`${API_URL}/new?aiMode=${aiOn}`, { method: 'POST' });
+            const data = await res.json();
             gameId = data.gameId;
+            opponentJoined = aiOn;
             renderBoard(data.board);
-            updateStatus(data.status, data.currentPlayer);
+            rematchBtn.style.display = 'none';
+            statusText.textContent = "Game Started!";
             enableBoard();
-        } catch (error) {
-            status.textContent = '❌ Server Connection Error';
-        }
+            return true;
+        } catch (e) { statusText.textContent = "Server Error"; return false; }
     }
 
-    async function makeMove(row, col) {
+    async function handleMove(r, c) {
         if (!gameId) return;
+        if (playerRole) {
+            if (!opponentJoined) { statusText.textContent = "Waiting for friend..."; return; }
+            if (playerRole !== currentTurn) return;
+        }
 
-        if (isMultiplayer && stompClient && stompClient.connected) {
-            // SEND MOVE VIA WEBSOCKET
-            stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({ row, column: col }));
+        sounds.move.play();
+
+        if (stompClient && stompClient.connected) {
+            stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({ row: r, column: c, player: playerRole }));
         } else {
-            // SEND MOVE VIA REST
-            try {
-                const response = await fetch(`${API_URL}/${gameId}/move`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ row, column: col })
-                });
-                const data = await response.json();
-                renderBoard(data.board);
-                updateStatus(data.status, data.currentPlayer);
-                if (data.status !== 'IN_PROGRESS') disableBoard();
-            } catch (error) {
-                status.textContent = '❌ Move Error';
+            const res = await fetch(`${API_URL}/${gameId}/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ row: r, column: c })
+            });
+            const data = await res.json();
+            renderBoard(data.board);
+            updateUI(data);
+        }
+    }
+
+    function updateUI(data) {
+        if (data.status.includes('WON') || data.status === 'DRAW') {
+            statusText.textContent = data.status.replace('_', ' ');
+            if (data.status.includes('WON')) sounds.win.play();
+            disableBoard();
+            if (playerRole) {
+                rematchBtn.style.display = 'block';
+                const readyCount = (data.playerXReady ? 1 : 0) + (data.playerOReady ? 1 : 0);
+                rematchBtn.textContent = `Request Rematch (${readyCount}/2)`;
             }
-        }
-    }
-
-    // Invite Friend Logic
-    inviteBtn.addEventListener('click', async () => {
-        await newGame(); // Start a human game
-        const inviteUrl = `${window.location.origin}${window.location.pathname}?gameId=${gameId}`;
-        navigator.clipboard.writeText(inviteUrl);
-        alert("Link Copied! Send it to a friend.");
-        connectWebSocket(gameId);
-    });
-
-    // Check for Join Link
-    window.onload = () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const idFromUrl = urlParams.get('gameId');
-        if (idFromUrl) {
-            gameId = idFromUrl;
-            connectWebSocket(gameId);
-            enableBoard();
-        }
-    };
-
-    function renderBoard(boardData) {
-        cells.forEach((cell, index) => {
-            const r = Math.floor(index / 3);
-            const c = index % 3;
-            const value = boardData[r][c];
-            cell.textContent = value === ' ' ? '' : value;
-            cell.className = 'cell' + (value === 'X' ? ' x' : value === 'O' ? ' o' : '');
-        });
-    }
-
-    function updateStatus(gameStatus, currentPlayer) {
-        if (gameStatus.includes('WON')) {
-            status.textContent = `🎉 ${gameStatus.replace('_', ' ')}!`;
-            status.classList.add('winner');
-        } else if (gameStatus === 'DRAW') {
-            status.textContent = "🤝 It's a Draw!";
         } else {
-            status.textContent = `${currentPlayer}'s turn`;
-            status.classList.remove('winner');
+            statusText.textContent = opponentJoined ? `${data.currentPlayer}'s turn` : "Waiting for friend...";
         }
+    }
+
+    function renderBoard(board) {
+        cells.forEach((cell, i) => {
+            const val = board[Math.floor(i/3)][i%3];
+            cell.textContent = val === ' ' ? '' : val;
+            cell.className = `cell ${val.toLowerCase()}`;
+            cell.disabled = (val !== ' ');
+        });
     }
 
     function enableBoard() { cells.forEach(c => c.disabled = false); }
     function disableBoard() { cells.forEach(c => c.disabled = true); }
 
+    document.getElementById('inviteBtn').onclick = async () => {
+        if (await newGame(true)) {
+            playerRole = 'X';
+            identityText.textContent = "YOU ARE PLAYER X";
+            aiControl.style.display = 'none';
+            const link = `${window.location.origin}${window.location.pathname}?gameId=${gameId}`;
+            navigator.clipboard.writeText(link);
+            alert("Invite link copied!");
+            connectWebSocket(gameId);
+        }
+    };
+
+    document.getElementById('newGame').onclick = () => {
+        playerRole = null;
+        identityText.textContent = "";
+        aiControl.style.display = 'flex';
+        newGame();
+    };
+
+    rematchBtn.onclick = () => {
+        if (stompClient) {
+            stompClient.send(`/app/rematch/${gameId}`, {}, JSON.stringify({ player: playerRole }));
+        }
+    };
+
     cells.forEach(cell => {
-        cell.addEventListener('click', () => {
-            makeMove(parseInt(cell.dataset.row), parseInt(cell.dataset.col));
-        });
+        cell.onclick = () => handleMove(cell.dataset.row, cell.dataset.col);
     });
 
-    newGameBtn.addEventListener('click', newGame);
-    disableBoard();
+    window.onload = () => {
+        const id = new URLSearchParams(window.location.search).get('gameId');
+        if (id) {
+            gameId = id;
+            playerRole = 'O';
+            identityText.textContent = "YOU ARE PLAYER O";
+            aiControl.style.display = 'none';
+            connectWebSocket(id);
+            enableBoard();
+        }
+    };
 </script>
 </body>
 </html>
