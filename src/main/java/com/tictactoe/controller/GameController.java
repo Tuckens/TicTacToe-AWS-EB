@@ -19,9 +19,9 @@ public class GameController {
     private Map<String, Game> games = new ConcurrentHashMap<>();
 
     @PostMapping("/new")
-    public GameResponse newGame() {
+    public GameResponse newGame(@RequestParam(required = false, defaultValue = "false" ) boolean aiMode) {
         String gameId = UUID.randomUUID().toString();
-        Game game = new Game();
+        Game game = new Game(aiMode);
         games.put(gameId, game);
 
         return new GameResponse(
