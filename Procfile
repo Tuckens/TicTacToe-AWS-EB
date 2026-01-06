@@ -1,1 +1,1 @@
-web: java -jar ticktactoe-api-1.0.0.jar --server.port=5000
+web: java -jar tictactoe-api-1.0.0.jar --server.port=5000
