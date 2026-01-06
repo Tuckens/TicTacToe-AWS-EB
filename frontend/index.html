@@ -156,33 +156,26 @@
     const aiControl = document.getElementById('aiControl');
 
     function connectWebSocket(id) {
-        const socket = new SockJS(`${BASE_URL}/ws-tictactoe`);
-        stompClient = Stomp.over(socket);
-        stompClient.debug = null;
+    const socket = new SockJS(`${BASE_URL}/ws-tictactoe`);
+    stompClient = Stomp.over(socket);
 
-        stompClient.connect({}, () => {
-            // Subscribe FIRST so we don't miss the join confirmation
-            stompClient.subscribe(`/topic/game/${id}`, (message) => {
-                const data = JSON.parse(message.body);
+    stompClient.connect({}, () => {
+        // SUCCESS: Clear the error message
+        statusText.textContent = "Connected! Waiting for opponent...";
 
-                // This is the trigger that unlocks the "Waiting for friend" screen
-                if (data.playerXPresent && data.playerOPresent) {
-                    opponentJoined = true;
-                }
-
-                currentTurn = data.currentPlayer;
-                renderBoard(data.board);
-                updateUI(data);
-            });
-
-            // Tell the server "I am here" (Works for both X and O)
-            stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
-
-        }, (error) => {
-            console.error("WebSocket Error: ", error);
-            statusText.textContent = "Connection Error. Try refreshing.";
+        stompClient.subscribe(`/topic/game/${id}`, (message) => {
+            const data = JSON.parse(message.body);
+            updateUI(data); // This should handle 'waiting for friend' logic
         });
-    }
+
+        // CRITICAL: Tell the backend we are here!
+        stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
+
+    }, (error) => {
+        console.error("STOMP error", error);
+        statusText.textContent = "Connection Error. Refresh or use HTTP.";
+    });
+}
 
     async function newGame(forceAiOff = false) {
         const aiOn = forceAiOff ? false : document.getElementById('aiToggle').checked;
