@@ -139,6 +139,10 @@
         join: new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3')
     };
 
+    function safePlay(sound) {
+        sound.play().catch(() => console.log("Sound play blocked until user interaction"));
+    }
+
     let gameId = null;
     let stompClient = null;
     let playerRole = null;
@@ -157,21 +161,26 @@
         stompClient.debug = null;
 
         stompClient.connect({}, () => {
-            // Join message sends player role so backend knows who's here
-            stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
-
+            // Subscribe FIRST so we don't miss the join confirmation
             stompClient.subscribe(`/topic/game/${id}`, (message) => {
                 const data = JSON.parse(message.body);
 
-                if (data.playerXPresent && data.playerOPresent && !opponentJoined) {
+                // This is the trigger that unlocks the "Waiting for friend" screen
+                if (data.playerXPresent && data.playerOPresent) {
                     opponentJoined = true;
-                    sounds.join.play();
                 }
 
                 currentTurn = data.currentPlayer;
                 renderBoard(data.board);
                 updateUI(data);
             });
+
+            // Tell the server "I am here" (Works for both X and O)
+            stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
+
+        }, (error) => {
+            console.error("WebSocket Error: ", error);
+            statusText.textContent = "Connection Error. Try refreshing.";
         });
     }
 
@@ -179,44 +188,64 @@
         const aiOn = forceAiOff ? false : document.getElementById('aiToggle').checked;
         try {
             const res = await fetch(`${API_URL}/new?aiMode=${aiOn}`, { method: 'POST' });
+            if (!res.ok) throw new Error("Server error");
             const data = await res.json();
             gameId = data.gameId;
+
+            // If AI is on, the "opponent" is technically present immediately
             opponentJoined = aiOn;
+
             renderBoard(data.board);
             rematchBtn.style.display = 'none';
-            statusText.textContent = "Game Started!";
+            statusText.textContent = aiOn ? "Playing against AI..." : "Waiting for friend...";
             enableBoard();
             return true;
-        } catch (e) { statusText.textContent = "Server Error"; return false; }
+        } catch (e) {
+            statusText.textContent = "Server Error";
+            console.error(e);
+            return false;
+        }
     }
 
     async function handleMove(r, c) {
         if (!gameId) return;
+
+        // If we have a playerRole (X or O), we are in a live multiplayer session
         if (playerRole) {
-            if (!opponentJoined) { statusText.textContent = "Waiting for friend..."; return; }
+            if (!opponentJoined) {
+                statusText.textContent = "Waiting for friend...";
+                return;
+            }
             if (playerRole !== currentTurn) return;
+
+            // Use WebSockets for live moves
+            if (stompClient && stompClient.connected) {
+                safePlay(sounds.move);
+                stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({
+                    row: parseInt(r),
+                    column: parseInt(c),
+                    player: playerRole
+                }));
+            }
+            return; // Exit so we don't call the fetch below
         }
 
-        sounds.move.play();
-
-        if (stompClient && stompClient.connected) {
-            stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({ row: r, column: c, player: playerRole }));
-        } else {
-            const res = await fetch(`${API_URL}/${gameId}/move`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ row: r, column: c })
-            });
-            const data = await res.json();
-            renderBoard(data.board);
-            updateUI(data);
-        }
+        // Standard Local/AI Move (REST API)
+        safePlay(sounds.move);
+        const res = await fetch(`${API_URL}/${gameId}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ row: r, column: c })
+        });
+        const data = await res.json();
+        renderBoard(data.board);
+        updateUI(data);
     }
 
     function updateUI(data) {
         if (data.status.includes('WON') || data.status === 'DRAW') {
             statusText.textContent = data.status.replace('_', ' ');
-            if (data.status.includes('WON')) sounds.win.play();
+            if (data.status.includes('WON')) safePlay(sounds.win);
             disableBoard();
             if (playerRole) {
                 rematchBtn.style.display = 'block';
@@ -240,22 +269,65 @@
     function enableBoard() { cells.forEach(c => c.disabled = false); }
     function disableBoard() { cells.forEach(c => c.disabled = true); }
 
-    document.getElementById('inviteBtn').onclick = async () => {
-        if (await newGame(true)) {
+    function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text);
+        } else {
+            let textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            return new Promise((res, rej) => {
+                document.execCommand('copy') ? res() : rej();
+                textArea.remove();
+            });
+        }
+    }
+
+    document.getElementById('inviteBtn').onclick = async function() {
+        const btn = this;
+        const originalText = btn.textContent;
+
+        btn.textContent = "Generating...";
+        const success = await newGame(true); // Creates game with aiMode = false
+
+        if (success && gameId) {
             playerRole = 'X';
             identityText.textContent = "YOU ARE PLAYER X";
             aiControl.style.display = 'none';
+
             const link = `${window.location.origin}${window.location.pathname}?gameId=${gameId}`;
-            navigator.clipboard.writeText(link);
-            alert("Invite link copied!");
+
+            // Update Host's URL so they are officially in the "session"
+            window.history.pushState({}, '', link);
+
+            copyToClipboard(link).then(() => {
+                alert("Invite link copied!");
+                btn.textContent = "Link Copied!";
+                setTimeout(() => btn.textContent = originalText, 3000);
+            }).catch(() => {
+                prompt("Could not auto-copy. Copy this link manually:", link);
+                btn.textContent = originalText;
+            });
+
             connectWebSocket(gameId);
+        } else {
+            btn.textContent = "Error!";
+            setTimeout(() => btn.textContent = originalText, 2000);
         }
     };
 
     document.getElementById('newGame').onclick = () => {
         playerRole = null;
+        opponentJoined = document.getElementById('aiToggle').checked;
         identityText.textContent = "";
         aiControl.style.display = 'flex';
+        // Remove gameId from URL for fresh local start
+        window.history.pushState({}, '', window.location.pathname);
         newGame();
     };
 

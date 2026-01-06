@@ -37,7 +37,7 @@ public class GameController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found");
         }
 
-        boolean success = game.makeMove(move.getRow(), move.getColumn());
+        boolean success = game.makeMove(move.getRow(), move.getColumn(), move.getPlayer());
 
         return createResponse(gameId, game, success ? null : "Invalid move");
     }

@@ -47,13 +47,22 @@ public class Game {
         return isReadyToStart() && currentPlayer.toString().equals(playerSymbol);
     }
 
-    public boolean makeMove(int row, int column) {
+
+    public boolean makeMove(int row, int column, String playerSymbol) {
+
+        if (!isReadyToStart()) {
+            return false;
+        }
+
+        if (playerSymbol != null && !currentPlayer.toString().equals(playerSymbol)) {
+            return false;
+        }
+
         if (gameStatus != GameStatus.IN_PROGRESS || !board.place(row, column, currentPlayer)) {
             return false;
         }
 
         processTurn();
-
 
         if (gameStatus == GameStatus.IN_PROGRESS && isAIMode && currentPlayer == aiPlayer) {
             makeAIMove();
