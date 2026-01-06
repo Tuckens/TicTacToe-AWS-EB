@@ -185,3 +185,61 @@
             console.error(error);
         }
     }
+
+
+// Render the board
+function renderBoard(board) {
+cells.forEach((cell, index) => {
+const row = Math.floor(index / 3);
+const col = index % 3;
+const value = board[row][col];
+
+cell.textContent = value === ' ' ? '' : value;
+cell.className = 'cell';
+
+if (value === 'X') cell.classList.add('x');
+if (value === 'O') cell.classList.add('o');
+});
+}
+
+// Update status message
+function updateStatus(gameStatus, currentPlayer) {
+if (gameStatus === 'X_WON') {
+status.textContent = '🎉 X Wins!';
+status.classList.add('winner');
+} else if (gameStatus === 'O_WON') {
+status.textContent = '🎉 O Wins!';
+status.classList.add('winner');
+} else if (gameStatus === 'DRAW') {
+status.textContent = '🤝 It\'s a Draw!';
+} else {
+status.textContent = `${currentPlayer}'s turn`;
+status.classList.remove('winner');
+}
+}
+
+// Enable/disable board
+function enableBoard() {
+cells.forEach(cell => cell.disabled = false);
+}
+
+function disableBoard() {
+cells.forEach(cell => cell.disabled = true);
+}
+
+// Event listeners
+cells.forEach(cell => {
+cell.addEventListener('click', () => {
+const row = parseInt(cell.dataset.row);
+const col = parseInt(cell.dataset.col);
+makeMove(row, col);
+});
+});
+
+newGameBtn.addEventListener('click', newGame);
+
+// Disable board initially
+disableBoard();
+</script>
+</body>
+</html>
