@@ -127,7 +127,7 @@
 </div>
 
 <script>
-    const API_URL = 'http://localhost:8081/api/game';
+    const API_URL = 'http://tictactoe-env.eba-hir2yshp.eu-central-1.elasticbeanstalk.com/api/game';
     let gameId = null;
 
     // Get DOM elements
@@ -136,7 +136,7 @@
     const status = document.getElementById('status');
     const newGameBtn = document.getElementById('newGame');
 
-    // Start new game
+   //Starting a new game
     async function newGame() {
         try {
             const response = await fetch(`${API_URL}/new`, {
@@ -185,5 +185,3 @@
             console.error(error);
         }
     }
-
-    // Render the board
