@@ -9,13 +9,13 @@ public class GameResponse {
     private String currentPlayer;
     private String error;
 
-    // New fields to sync with the Game model
+
     private boolean playerXPresent;
     private boolean playerOPresent;
     private boolean playerXReady;
     private boolean playerOReady;
 
-    // Full Constructor
+
     public GameResponse(String gameId, char[][] board, GameStatus status, String currentPlayer,
                         String error, boolean playerXPresent, boolean playerOPresent,
                         boolean playerXReady, boolean playerOReady) {

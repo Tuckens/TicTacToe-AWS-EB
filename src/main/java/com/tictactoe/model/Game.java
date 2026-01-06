@@ -1,13 +1,13 @@
 package com.tictactoe.model;
 
-import com.tictactoe.service.AIPlayer; // Ensure this matches your package
+
 
 public class Game {
     private Board board = new Board();
     private Player currentPlayer = Player.X;
     private GameStatus gameStatus = GameStatus.IN_PROGRESS;
 
-    // Unified AI variables
+
     private boolean isAIMode = false;
     private final Player aiPlayer = Player.O;
     private final AIPlayer ai = new AIPlayer(); // Assuming you have an instance
@@ -54,7 +54,7 @@ public class Game {
 
         processTurn();
 
-        // AI Logic
+
         if (gameStatus == GameStatus.IN_PROGRESS && isAIMode && currentPlayer == aiPlayer) {
             makeAIMove();
         }

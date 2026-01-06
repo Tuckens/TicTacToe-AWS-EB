@@ -28,8 +28,7 @@ public class LiveGameController {
             boolean success = game.makeMove(move.getRow(), move.getColumn());
 
             if (success) {
-                // Instead of returning a value, we PUSH the update to all
-                // subscribers of this specific game ID
+
                 GameResponse response = new GameResponse(
                         gameId,
                         game.getBoard().getCells(),

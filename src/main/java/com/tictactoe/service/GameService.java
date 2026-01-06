@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class GameService {
 
-    // This is the "Single Source of Truth"
+    // This is the "Single Source of Truth
     private final Map<String, Game> games = new ConcurrentHashMap<>();
 
     public void saveGame(String gameId, Game game) {
