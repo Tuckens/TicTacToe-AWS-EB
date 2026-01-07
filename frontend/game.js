@@ -100,25 +100,11 @@ async function newGame(forceAiOff = false) {
 }
 
 async function handleMove(r, c) {
-
-    if (!gameId || gameEnded) {
-        console.log("Move blocked: Game ended or not initialized");
-        return;
-    }
+    if (!gameId || gameEnded) return;
 
     if (playerRole) {
-            console.log("Move blocked: You are a spectator");
-            return;
-        }
-
-        if (!opponentJoined) {
-            console.log("Move blocked: Waiting for opponent");
-            return;
-        }
-
-
-        if (playerRole !== currentTurn) {
-            console.log(`Move blocked: It is ${currentTurn}'s turn, you are ${playerRole}`);
+        if (isSpectator || !opponentJoined || playerRole !== currentTurn) {
+            console.log("Move blocked: Not your turn or waiting for opponent.");
             return;
         }
 
@@ -130,7 +116,6 @@ async function handleMove(r, c) {
             }));
         }
     } else {
-
         try {
             const res = await fetch(`${API_URL}/${gameId}/move`, {
                 method: 'POST',
@@ -145,7 +130,7 @@ async function handleMove(r, c) {
             renderBoard(data.board);
             updateUI(data);
         } catch (e) {
-            console.error("Hotseat move failed:", e);
+            console.error("Move failed:", e);
         }
     }
 }
