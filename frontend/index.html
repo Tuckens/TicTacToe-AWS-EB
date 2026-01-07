@@ -44,6 +44,45 @@
         <button id="inviteBtn">Invite Friend</button>
         <button id="rematchBtn">Request Rematch (0/2)</button>
     </div>
+
+    <div id="chatContainer" style="display: none; margin-top: 20px; width: 100%; max-width: 400px;">
+        <div id="chatBox" style="
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            text-align: left;
+        "></div>
+
+        <div style="display: flex; gap: 10px;">
+            <input
+                    type="text"
+                    id="chatInput"
+                    placeholder="Type a message..."
+                    style="
+                    flex: 1;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 20px;
+                    font-size: 14px;
+                "
+            />
+            <button
+                    id="sendBtn"
+                    style="
+                    background: #48bb78;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 20px;
+                    cursor: pointer;
+                    font-weight: bold;
+                "
+            >Send</button>
+        </div>
+    </div>
 </div>
 
 <script src="game.js"></script>

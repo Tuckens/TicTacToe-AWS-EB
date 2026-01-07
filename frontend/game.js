@@ -12,14 +12,18 @@ let stompClient = null;
 let playerRole = null;
 let opponentJoined = false;
 let currentTurn = 'X';
-let gameEnded = false; // Track if game just ended
-let rematchRequested = false; // Track if we requested rematch
+let gameEnded = false;
+let rematchRequested = false;
 
 const cells = document.querySelectorAll('.cell');
 const statusText = document.getElementById('status');
 const identityText = document.getElementById('identity');
 const rematchBtn = document.getElementById('rematchBtn');
 const aiControl = document.getElementById('aiControl');
+const chatBox = document.getElementById('chatBox');
+const chatInput = document.getElementById('chatInput');
+const chatContainer = document.getElementById('chatContainer');
+const sendBtn = document.getElementById('sendBtn');
 
 function connectWebSocket(id) {
     const socket = new SockJS(`${BASE_URL}/ws-tictactoe`);
@@ -29,10 +33,10 @@ function connectWebSocket(id) {
         console.log("WebSocket connected!");
         statusText.textContent = "Connected! Waiting for opponent...";
 
+        // Game state subscription
         stompClient.subscribe(`/topic/game/${id}`, (message) => {
             console.log("Received message:", message.body);
             const data = JSON.parse(message.body);
-
 
             if (playerRole === 'X') {
                 opponentJoined = data.playerOPresent;
@@ -45,8 +49,16 @@ function connectWebSocket(id) {
             updateUI(data);
         });
 
+        // Chat subscription
+        stompClient.subscribe(`/topic/game/${id}/chat`, (message) => {
+            const chatMsg = JSON.parse(message.body);
+            displayChatMessage(chatMsg);
+        });
 
         stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
+
+        // Show chat container
+        chatContainer.style.display = 'block';
 
     }, (error) => {
         console.error("STOMP error:", error);
@@ -81,7 +93,6 @@ async function newGame(forceAiOff = false) {
 async function handleMove(r, c) {
     if (!gameId) return;
 
-
     if (playerRole) {
         if (!opponentJoined) {
             statusText.textContent = "⏳ Waiting for opponent to join...";
@@ -103,7 +114,6 @@ async function handleMove(r, c) {
         return;
     }
 
-
     const res = await fetch(`${API_URL}/${gameId}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -119,7 +129,6 @@ function updateUI(data) {
 
     const isGameOver = data.status === 'X_WON' || data.status === 'O_WON' || data.status === 'DRAW';
     const isGameInProgress = data.status === 'IN_PROGRESS';
-
 
     if (gameEnded && rematchRequested && isGameInProgress && !data.playerXReady && !data.playerOReady) {
         console.log("Rematch completed! Swapping roles...");
@@ -189,6 +198,37 @@ function disableBoard() {
     cells.forEach(c => c.disabled = true);
 }
 
+function sendChatMessage() {
+    const message = chatInput.value.trim();
+    if (message && stompClient && stompClient.connected) {
+        stompClient.send(`/app/chat/${gameId}`, {}, JSON.stringify({
+            player: playerRole,
+            message: message
+        }));
+        chatInput.value = '';
+    }
+}
+
+function displayChatMessage(chatMsg) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = chatMsg.player === playerRole ? 'chat-message own' : 'chat-message';
+
+    const playerDiv = document.createElement('div');
+    playerDiv.className = 'chat-player';
+    playerDiv.textContent = `Player ${chatMsg.player}:`;
+
+    const textDiv = document.createElement('div');
+    textDiv.className = 'chat-text';
+    textDiv.textContent = chatMsg.message;
+
+    msgDiv.appendChild(playerDiv);
+    msgDiv.appendChild(textDiv);
+    chatBox.appendChild(msgDiv);
+
+    // Auto-scroll to bottom
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
 function copyToClipboard(text) {
     if (navigator.clipboard && window.isSecureContext) {
         return navigator.clipboard.writeText(text);
@@ -213,7 +253,7 @@ document.getElementById('inviteBtn').onclick = async function() {
     const originalText = btn.textContent;
 
     btn.textContent = "Generating...";
-    const success = await newGame(true); // aiMode = false
+    const success = await newGame(true);
 
     if (success && gameId) {
         playerRole = 'X';
@@ -244,6 +284,8 @@ document.getElementById('newGame').onclick = () => {
     opponentJoined = true;
     identityText.textContent = "";
     aiControl.style.display = 'flex';
+    chatContainer.style.display = 'none';
+    chatBox.innerHTML = ''; // Clear chat history
     window.history.pushState({}, '', window.location.pathname);
     gameEnded = false;
     rematchRequested = false;
@@ -256,6 +298,14 @@ rematchBtn.onclick = () => {
         stompClient.send(`/app/rematch/${gameId}`, {}, JSON.stringify({ player: playerRole }));
     }
 };
+
+sendBtn.onclick = sendChatMessage;
+
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        sendChatMessage();
+    }
+});
 
 cells.forEach(cell => {
     cell.onclick = () => handleMove(cell.dataset.row, cell.dataset.col);
