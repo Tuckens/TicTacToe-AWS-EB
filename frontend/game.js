@@ -35,31 +35,18 @@ function connectWebSocket(id) {
     let messageCount = 0;
 
     stompClient.connect({}, () => {
-
-        console.log("WebSocket connected!");
-        console.log("My sessionId:", sessionId);
-        console.log("Trying to join as:", playerRole);
         statusText.textContent = "Connected!";
 
         stompClient.subscribe(`/topic/game/${id}`, (message) => {
             const data = JSON.parse(message.body);
             messageCount++;
 
-
-            console.log("=== RECEIVED GAME STATE (Message #" + messageCount + ") ===");
-            console.log("playerXPresent:", data.playerXPresent);
-            console.log("playerOPresent:", data.playerOPresent);
-            console.log("My role:", playerRole);
-            console.log("Is spectator:", isSpectator);
-
             if (messageCount === 1) {
                 if (playerRole === 'O' && data.playerXPresent && data.playerOPresent) {
                     if (wasOAlreadyPresent) {
-                        console.log("Slot was already taken. Switching to Spectator.");
                         isSpectator = true;
                         playerRole = 'Spectator';
                         identityText.textContent = "👁️ SPECTATOR MODE";
-
                         statusText.textContent = "Both player slots are full";
                     }
                 }
@@ -88,8 +75,7 @@ function connectWebSocket(id) {
 
         chatContainer.style.display = 'block';
     }, (error) => {
-        console.error("STOMP error:", error);
-        statusText.textContent = "❌ Connection Error. Try refreshing.";
+        statusText.textContent = "❌ Connection Error";
     });
 }
 
@@ -97,147 +83,85 @@ async function newGame(forceAiOff = false) {
     const aiOn = forceAiOff ? false : document.getElementById('aiToggle').checked;
     try {
         const res = await fetch(`${API_URL}/new?aiMode=${aiOn}`, { method: 'POST' });
-        if (!res.ok) throw new Error("Server error");
         const data = await res.json();
         gameId = data.gameId;
-
         gameEnded = false;
         rematchRequested = false;
         isSpectator = false;
-
-
-        if (!playerRole) {
-            opponentJoined = true;
-        } else {
-            opponentJoined = false;
-        }
+        opponentJoined = !playerRole;
 
         renderBoard(data.board);
-        rematchBtn.style.display = 'none';
-
-        if (playerRole) {
-            statusText.textContent = "Waiting for opponent...";
-        } else if (aiOn) {
-            statusText.textContent = `${data.currentPlayer}'s turn`;
-        } else {
-            statusText.textContent = `${data.currentPlayer}'s turn (Pass & Play)`;
-        }
-
-        enableBoard();
+        updateUI(data);
         return true;
     } catch (e) {
         statusText.textContent = "❌ Server Error";
-        console.error(e);
         return false;
     }
 }
 
 async function handleMove(r, c) {
-    if (!gameId) return;
+    if (!gameId || gameEnded) return;
 
     if (playerRole) {
-        if (isSpectator) {
-            statusText.textContent = "👁️ You are spectating - cannot make moves";
-            return;
-        }
-        if (!opponentJoined) {
-            statusText.textContent = "⏳ Waiting for opponent to join...";
-            return;
-        }
-        if (playerRole !== currentTurn) {
-            statusText.textContent = `It's ${currentTurn}'s turn!`;
-            return;
-        }
+        if (isSpectator || !opponentJoined || playerRole !== currentTurn) return;
 
-        if (stompClient && stompClient.connected) {
-            stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({
-                row: parseInt(r),
-                column: parseInt(c),
-                player: playerRole
-            }));
-        }
-        return;
+        stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({
+            row: parseInt(r),
+            column: parseInt(c),
+            player: playerRole
+        }));
+    } else {
+        // Hotseat Move
+        try {
+            const res = await fetch(`${API_URL}/${gameId}/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ row: parseInt(r), column: parseInt(c), player: null })
+            });
+            const data = await res.json();
+            renderBoard(data.board);
+            updateUI(data);
+        } catch (e) { console.error(e); }
     }
-
-    const res = await fetch(`${API_URL}/${gameId}/move`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                row: parseInt(r),
-                column: parseInt(c),
-                player: null
-            })
-        });
-    });
-    const data = await res.json();
-    renderBoard(data.board);
-    updateUI(data);
 }
 
 function updateUI(data) {
-    console.log("Updating UI with:", data);
-
-    const isGameOver = data.status === 'X_WON' || data.status === 'O_WON' || data.status === 'DRAW';
+    const isGameOver = data.status.endsWith('_WON') || data.status === 'DRAW';
     const isGameInProgress = data.status === 'IN_PROGRESS';
-
-
-    if (gameEnded && rematchRequested && isGameInProgress && !data.playerXReady && !data.playerOReady && !isSpectator) {
-        console.log("Rematch started - roles stay the same, turn order swaps");
-        gameEnded = false;
-        rematchRequested = false;
-    }
 
     if (isGameOver) {
         const statusMap = { 'X_WON': '🎉 X Wins!', 'O_WON': '🎉 O Wins!', 'DRAW': '🤝 Draw!' };
         statusText.textContent = statusMap[data.status];
         if (data.status !== 'DRAW') playWinSound();
-        disableBoard();
         gameEnded = true;
-
         if (playerRole && !isSpectator) {
             rematchBtn.style.display = 'block';
-            const readyCount = (data.playerXReady ? 1 : 0) + (data.playerOReady ? 1 : 0);
-            rematchBtn.textContent = `Request Rematch (${readyCount}/2)`;
+            rematchBtn.textContent = `Request Rematch (${(data.playerXReady ? 1 : 0) + (data.playerOReady ? 1 : 0)}/2)`;
         }
-    } else if (isGameInProgress) {
+    } else {
         rematchBtn.style.display = 'none';
-
         if (playerRole) {
-            if (isSpectator) {
-                statusText.textContent = `Spectating - ${data.currentPlayer}'s turn`;
-            } else if (opponentJoined) {
-                statusText.textContent = `${data.currentPlayer}'s turn`;
-            } else {
-                statusText.textContent = "⏳ Waiting for opponent to join...";
-            }
+            statusText.textContent = isSpectator ? `Spectating - ${data.currentPlayer}'s turn` :
+                                     (opponentJoined ? `${data.currentPlayer}'s turn` : "⏳ Waiting for opponent...");
         } else {
             statusText.textContent = `${data.currentPlayer}'s turn`;
         }
-
-        if (!isSpectator) {
-            enableBoard();
-        }
     }
 }
-
 
 function renderBoard(board) {
     cells.forEach((cell, i) => {
         const val = board[Math.floor(i/3)][i%3];
         cell.textContent = val === ' ' ? '' : val;
         cell.className = `cell ${val.toLowerCase()}`;
-        cell.disabled = (val !== ' ');
     });
 }
-function enableBoard() { cells.forEach(c => c.disabled = false); }
-function disableBoard() { cells.forEach(c => c.disabled = true); }
 
 function sendChatMessage() {
     const message = chatInput.value.trim();
-    if (message && stompClient && stompClient.connected) {
-        const displayName = isSpectator ? 'Spectator' : `Player ${playerRole}`;
+    if (message && stompClient?.connected) {
         stompClient.send(`/app/chat/${gameId}`, {}, JSON.stringify({
-            player: displayName,
+            player: isSpectator ? 'Spectator' : `Player ${playerRole}`,
             message: message
         }));
         chatInput.value = '';
@@ -246,54 +170,46 @@ function sendChatMessage() {
 
 function displayChatMessage(chatMsg) {
     const msgDiv = document.createElement('div');
-    const isOwnMessage = (isSpectator && chatMsg.player === 'Spectator') || (!isSpectator && chatMsg.player === `Player ${playerRole}`);
-    msgDiv.className = isOwnMessage ? 'chat-message own' : 'chat-message';
+    const isOwn = (isSpectator && chatMsg.player === 'Spectator') || chatMsg.player === `Player ${playerRole}`;
+    msgDiv.className = isOwn ? 'chat-message own' : 'chat-message';
     msgDiv.innerHTML = `<div class="chat-player">${chatMsg.player}:</div><div class="chat-text">${chatMsg.message}</div>`;
     chatBox.appendChild(msgDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-function copyToClipboard(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-        return navigator.clipboard.writeText(text);
-    } else {
-        let textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed";
-        textArea.style.left = "-999999px";
-        textArea.style.top = "-999999px";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        return new Promise((res, rej) => {
-            document.execCommand('copy') ? res() : rej();
-            textArea.remove();
-        });
-    }
-}
-
-
 document.getElementById('inviteBtn').onclick = async function() {
     const btn = this;
     const originalText = btn.textContent;
+
     btn.textContent = "Generating...";
+
     const success = await newGame(true);
 
     if (success && gameId) {
+
         playerRole = 'X';
+        isSpectator = false;
         identityText.textContent = "YOU ARE PLAYER X";
         aiControl.style.display = 'none';
+
+
         const link = `${window.location.origin}${window.location.pathname}?gameId=${gameId}`;
-        window.history.pushState({}, '', link);
-        copyToClipboard(link).then(() => {
-            alert("✅ Invite link copied! Share it with your friend.");
-            btn.textContent = "Link Copied!";
-            setTimeout(() => btn.textContent = originalText, 3000);
-        }).catch(() => {
+        window.history.pushState({ gameId: gameId }, '', link);
+
+
+        connectWebSocket(gameId);
+
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(link).then(() => {
+                alert("✅ Invite link copied! Share it with your friend.");
+                btn.textContent = "Link Copied!";
+                setTimeout(() => btn.textContent = originalText, 3000);
+            });
+        } else {
             prompt("Copy this link manually:", link);
             btn.textContent = originalText;
-        });
-        connectWebSocket(gameId);
+        }
     } else {
         btn.textContent = "Error!";
         setTimeout(() => btn.textContent = originalText, 2000);
@@ -311,39 +227,29 @@ document.getElementById('newGame').onclick = async () => {
 };
 
 rematchBtn.onclick = () => {
-    if (stompClient && stompClient.connected && !isSpectator) {
-        rematchRequested = true;
+    if (stompClient?.connected && !isSpectator) {
         stompClient.send(`/app/rematch/${gameId}`, {}, JSON.stringify({ player: playerRole }));
     }
 };
 
 sendBtn.onclick = sendChatMessage;
-chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChatMessage(); });
-cells.forEach(cell => { cell.onclick = () => handleMove(cell.dataset.row, cell.dataset.col); });
+chatInput.onkeypress = (e) => { if (e.key === 'Enter') sendChatMessage(); };
+cells.forEach(cell => cell.onclick = () => handleMove(cell.dataset.row, cell.dataset.col));
 
 window.onload = async () => {
     const id = new URLSearchParams(window.location.search).get('gameId');
     if (id) {
         gameId = id;
-        statusText.textContent = "Connecting..."; // RESTORED
         try {
-            const response = await fetch(`${API_URL}/${id}/state`);
-            const currentState = await response.json();
-            if (currentState.playerOPresent) {
-                wasOAlreadyPresent = true;
-                isSpectator = true;
-                playerRole = 'Spectator';
-                identityText.textContent = "👁️ SPECTATOR MODE";
+            const res = await fetch(`${API_URL}/${id}/state`);
+            const state = await res.json();
+            if (state.playerOPresent) {
+                isSpectator = true; wasOAlreadyPresent = true;
+                playerRole = 'Spectator'; identityText.textContent = "👁️ SPECTATOR MODE";
             } else {
-                wasOAlreadyPresent = false;
-                playerRole = 'O';
-                identityText.textContent = "YOU ARE PLAYER O";
+                playerRole = 'O'; identityText.textContent = "YOU ARE PLAYER O";
             }
-        } catch (e) {
-            console.log("Could not pre-fetch game state");
-            playerRole = 'O';
-            identityText.textContent = "YOU ARE PLAYER O";
-        }
+        } catch (e) { playerRole = 'O'; }
         aiControl.style.display = 'none';
         connectWebSocket(id);
     } else {
@@ -351,18 +257,17 @@ window.onload = async () => {
     }
 };
 
-
 (function() {
     const header = document.getElementById('chatHeader');
-    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
     header.onmousedown = (e) => {
-        e.preventDefault(); pos3 = e.clientX; pos4 = e.clientY;
-        document.onmouseup = () => { document.onmouseup = null; document.onmousemove = null; };
+        p3 = e.clientX; p4 = e.clientY;
+        document.onmouseup = () => document.onmousemove = null;
         document.onmousemove = (e) => {
-            e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY;
-            pos3 = e.clientX; pos4 = e.clientY;
-            chatContainer.style.top = (chatContainer.offsetTop - pos2) + "px";
-            chatContainer.style.left = (chatContainer.offsetLeft - pos1) + "px";
+            p1 = p3 - e.clientX; p2 = p4 - e.clientY;
+            p3 = e.clientX; p4 = e.clientY;
+            chatContainer.style.top = (chatContainer.offsetTop - p2) + "px";
+            chatContainer.style.left = (chatContainer.offsetLeft - p1) + "px";
         };
     };
 })();
