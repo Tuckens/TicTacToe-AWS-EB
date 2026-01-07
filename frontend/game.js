@@ -113,6 +113,18 @@ async function handleMove(r, c) {
 function updateUI(data) {
     console.log("Updating UI with:", data);
 
+    // Handle role swap after rematch
+    if (data.status === 'IN_PROGRESS' && data.playerXReady === false && data.playerOReady === false) {
+        // Fresh game after rematch - swap roles
+        if (playerRole === 'X') {
+            playerRole = 'O';
+            identityText.textContent = "YOU ARE PLAYER O";
+        } else if (playerRole === 'O') {
+            playerRole = 'X';
+            identityText.textContent = "YOU ARE PLAYER X";
+        }
+    }
+
     if (data.status === 'X_WON' || data.status === 'O_WON' || data.status === 'DRAW') {
         const statusMap = {
             'X_WON': '🎉 X Wins!',
@@ -133,6 +145,8 @@ function updateUI(data) {
             rematchBtn.textContent = `Request Rematch (${readyCount}/2)`;
         }
     } else {
+        rematchBtn.style.display = 'none';
+
         if (playerRole) {
             if (opponentJoined) {
                 statusText.textContent = `${data.currentPlayer}'s turn`;
@@ -142,6 +156,8 @@ function updateUI(data) {
         } else {
             statusText.textContent = `${data.currentPlayer}'s turn`;
         }
+
+        enableBoard();
     }
 }
 
