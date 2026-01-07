@@ -33,38 +33,30 @@ function connectWebSocket(id) {
     const socket = new SockJS(`${BASE_URL}/ws-tictactoe`);
     stompClient = Stomp.over(socket);
 
-    let firstUpdate = true;
+    let updateCount = 0;
 
     stompClient.connect({}, () => {
         console.log("WebSocket connected!");
         statusText.textContent = "Connected!";
 
         stompClient.subscribe(`/topic/game/${id}`, (message) => {
-            console.log("Received message:", message.body);
+            console.log("Received game state:", message.body);
             const data = JSON.parse(message.body);
 
-            if (firstUpdate) {
-                firstUpdate = false;
+            updateCount++;
+            console.log("Update count:", updateCount, "playerRole:", playerRole, "isSpectator:", isSpectator);
 
 
-                if (playerRole === 'X') {
-                    identityText.textContent = "YOU ARE PLAYER X";
-                } else if (playerRole === 'O') {
-                    identityText.textContent = "YOU ARE PLAYER O";
+            if (updateCount === 2 && playerRole === 'O' && !isSpectator) {
+
+                if (!data.playerOPresent || (data.playerXPresent && data.playerOPresent && !opponentJoined)) {
+                    console.log("Detected as spectator on update 2");
+                    isSpectator = true;
+                    playerRole = 'Spectator';
+                    identityText.textContent = "👁️ SPECTATOR MODE";
+                    statusText.textContent = "Both player slots are full - spectating";
+                    disableBoard();
                 }
-
-
-                setTimeout(() => {
-                    if (playerRole === 'O' && !opponentJoined) {
-
-                        console.log("O slot was already filled - becoming spectator");
-                        isSpectator = true;
-                        playerRole = 'Spectator';
-                        identityText.textContent = "👁️ SPECTATOR MODE";
-                        statusText.textContent = "Both player slots are full - spectating";
-                        disableBoard();
-                    }
-                }, 300);
             }
 
             if (!isSpectator) {
@@ -97,6 +89,7 @@ function connectWebSocket(id) {
         statusText.textContent = "❌ Connection Error. Try refreshing.";
     });
 }
+
 async function newGame(forceAiOff = false) {
     const aiOn = forceAiOff ? false : document.getElementById('aiToggle').checked;
     try {
@@ -183,16 +176,9 @@ function updateUI(data) {
     const isGameInProgress = data.status === 'IN_PROGRESS';
 
 
-    if (gameEnded && rematchRequested && isGameInProgress && !data.playerXReady && !data.playerOReady) {
-        console.log("Rematch completed! Swapping roles...");
+    if (gameEnded && rematchRequested && isGameInProgress && !data.playerXReady && !data.playerOReady && !isSpectator) {
+        console.log("Rematch started - roles stay the same, turn order swaps");
 
-        if (playerRole === 'X') {
-            playerRole = 'O';
-            identityText.textContent = "YOU ARE PLAYER O";
-        } else if (playerRole === 'O') {
-            playerRole = 'X';
-            identityText.textContent = "YOU ARE PLAYER X";
-        }
         gameEnded = false;
         rematchRequested = false;
     }

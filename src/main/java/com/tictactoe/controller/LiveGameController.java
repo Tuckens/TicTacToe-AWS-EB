@@ -7,6 +7,7 @@ import com.tictactoe.dto.JoinRequest;
 import com.tictactoe.model.Game;
 import com.tictactoe.model.Player;
 import com.tictactoe.service.GameService;
+import com.tictactoe.dto.JoinResponse;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
@@ -31,8 +32,9 @@ public class LiveGameController {
             String sessionId = request.getSessionId();
             Player requestedPlayer = "X".equals(request.getPlayer()) ? Player.X : Player.O;
 
-            // Check if this session can join as the player
-            if (game.canJoinAsPlayer(sessionId, requestedPlayer)) {
+            boolean wasSpectator = !game.canJoinAsPlayer(sessionId, requestedPlayer);
+
+            if (!wasSpectator) {
                 game.assignPlayer(sessionId, requestedPlayer);
 
                 if (requestedPlayer == Player.X) {
