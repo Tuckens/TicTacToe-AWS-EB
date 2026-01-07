@@ -33,7 +33,6 @@ function connectWebSocket(id) {
         console.log("WebSocket connected!");
         statusText.textContent = "Connected! Waiting for opponent...";
 
-        // Game state subscription
         stompClient.subscribe(`/topic/game/${id}`, (message) => {
             console.log("Received message:", message.body);
             const data = JSON.parse(message.body);
@@ -49,7 +48,6 @@ function connectWebSocket(id) {
             updateUI(data);
         });
 
-        // Chat subscription
         stompClient.subscribe(`/topic/game/${id}/chat`, (message) => {
             const chatMsg = JSON.parse(message.body);
             displayChatMessage(chatMsg);
@@ -57,7 +55,6 @@ function connectWebSocket(id) {
 
         stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
 
-        // Show chat container
         chatContainer.style.display = 'block';
 
     }, (error) => {
@@ -74,13 +71,21 @@ async function newGame(forceAiOff = false) {
         const data = await res.json();
         gameId = data.gameId;
 
-        opponentJoined = aiOn;
+        opponentJoined = true;
         gameEnded = false;
         rematchRequested = false;
 
         renderBoard(data.board);
         rematchBtn.style.display = 'none';
-        statusText.textContent = aiOn ? "Playing against AI..." : "Click 'Invite Friend' to play with someone!";
+
+        if (playerRole) {
+            statusText.textContent = "Waiting for opponent...";
+        } else if (aiOn) {
+            statusText.textContent = `${data.currentPlayer}'s turn`;
+        } else {
+            statusText.textContent = `${data.currentPlayer}'s turn (Hot-seat mode)`;
+        }
+
         enableBoard();
         return true;
     } catch (e) {
@@ -225,7 +230,6 @@ function displayChatMessage(chatMsg) {
     msgDiv.appendChild(textDiv);
     chatBox.appendChild(msgDiv);
 
-    // Auto-scroll to bottom
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
@@ -285,7 +289,7 @@ document.getElementById('newGame').onclick = () => {
     identityText.textContent = "";
     aiControl.style.display = 'flex';
     chatContainer.style.display = 'none';
-    chatBox.innerHTML = ''; // Clear chat history
+    chatBox.innerHTML = '';
     window.history.pushState({}, '', window.location.pathname);
     gameEnded = false;
     rematchRequested = false;
@@ -325,3 +329,34 @@ window.onload = () => {
         enableBoard();
     }
 };
+
+// SIMPLE DRAG - NO BUGS
+(function() {
+    const header = document.getElementById('chatHeader');
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+
+    header.onmousedown = dragMouseDown;
+
+    function dragMouseDown(e) {
+        e.preventDefault();
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.onmouseup = closeDragElement;
+        document.onmousemove = elementDrag;
+    }
+
+    function elementDrag(e) {
+        e.preventDefault();
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        chatContainer.style.top = (chatContainer.offsetTop - pos2) + "px";
+        chatContainer.style.left = (chatContainer.offsetLeft - pos1) + "px";
+    }
+
+    function closeDragElement() {
+        document.onmouseup = null;
+        document.onmousemove = null;
+    }
+})();

@@ -16,74 +16,53 @@
 <h1>🎮 Tic Tac Toe</h1>
 
 <div class="game-container">
-    <div id="identity"></div>
-    <div id="status">Click "New Game" to start!</div>
+    <div class="game-section">
+        <div id="identity"></div>
+        <div id="status">Click "New Game" to start!</div>
 
-    <div class="board" id="board">
-        <button class="cell" data-row="0" data-col="0"></button>
-        <button class="cell" data-row="0" data-col="1"></button>
-        <button class="cell" data-row="0" data-col="2"></button>
-        <button class="cell" data-row="1" data-col="0"></button>
-        <button class="cell" data-row="1" data-col="1"></button>
-        <button class="cell" data-row="1" data-col="2"></button>
-        <button class="cell" data-row="2" data-col="0"></button>
-        <button class="cell" data-row="2" data-col="1"></button>
-        <button class="cell" data-row="2" data-col="2"></button>
+        <div class="board" id="board">
+            <button class="cell" data-row="0" data-col="0"></button>
+            <button class="cell" data-row="0" data-col="1"></button>
+            <button class="cell" data-row="0" data-col="2"></button>
+            <button class="cell" data-row="1" data-col="0"></button>
+            <button class="cell" data-row="1" data-col="1"></button>
+            <button class="cell" data-row="1" data-col="2"></button>
+            <button class="cell" data-row="2" data-col="0"></button>
+            <button class="cell" data-row="2" data-col="1"></button>
+            <button class="cell" data-row="2" data-col="2"></button>
+        </div>
+
+        <div id="aiControl" style="margin: 10px 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <span>Play against AI:</span>
+            <label class="switch">
+                <input type="checkbox" id="aiToggle" checked>
+                <span class="slider"></span>
+            </label>
+        </div>
+
+        <div class="btn-group">
+            <button id="newGame">New Game</button>
+            <button id="inviteBtn">Invite Friend</button>
+            <button id="rematchBtn">Request Rematch (0/2)</button>
+        </div>
     </div>
 
-    <div id="aiControl" style="margin: 10px 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
-        <span>Play against AI:</span>
-        <label class="switch">
-            <input type="checkbox" id="aiToggle" checked>
-            <span class="slider"></span>
-        </label>
-    </div>
+    <div id="chatContainer" style="display: none;">
+        <div id="chatHeader">
+            <h3>💬 Chat</h3>
+            <span style="font-size: 12px; opacity: 0.7;">Drag to move</span>
+        </div>
+        <div id="chatBox"></div>
 
-    <div class="btn-group">
-        <button id="newGame">New Game</button>
-        <button id="inviteBtn">Invite Friend</button>
-        <button id="rematchBtn">Request Rematch (0/2)</button>
-    </div>
-
-    <div id="chatContainer" style="display: none; margin-top: 20px; width: 100%; max-width: 400px;">
-        <div id="chatBox" style="
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            padding: 15px;
-            height: 200px;
-            overflow-y: auto;
-            margin-bottom: 10px;
-            text-align: left;
-        "></div>
-
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
             <input
                     type="text"
                     id="chatInput"
                     placeholder="Type a message..."
-                    style="
-                    flex: 1;
-                    padding: 10px;
-                    border: none;
-                    border-radius: 20px;
-                    font-size: 14px;
-                "
             />
-            <button
-                    id="sendBtn"
-                    style="
-                    background: #48bb78;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 20px;
-                    cursor: pointer;
-                    font-weight: bold;
-                "
-            >Send</button>
+            <button id="sendBtn">Send</button>
         </div>
     </div>
-</div>
 
 <script src="game.js"></script>
 </body>
