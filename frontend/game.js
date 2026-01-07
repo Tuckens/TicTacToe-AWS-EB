@@ -24,18 +24,31 @@ function connectWebSocket(id) {
     stompClient = Stomp.over(socket);
 
     stompClient.connect({}, () => {
+        console.log("WebSocket connected!");
         statusText.textContent = "Connected! Waiting for opponent...";
 
         stompClient.subscribe(`/topic/game/${id}`, (message) => {
+            console.log("Received message:", message.body);
             const data = JSON.parse(message.body);
+
+            // Update opponent joined status
+            if (playerRole === 'X') {
+                opponentJoined = data.playerOPresent;
+            } else {
+                opponentJoined = data.playerXPresent;
+            }
+
+            currentTurn = data.currentPlayer;
+            renderBoard(data.board);
             updateUI(data);
         });
 
+        // Tell server we joined
         stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
 
     }, (error) => {
-        console.error("STOMP error", error);
-        statusText.textContent = "Connection Error. Refresh or use HTTP.";
+        console.error("STOMP error:", error);
+        statusText.textContent = "❌ Connection Error. Try refreshing.";
     });
 }
 
@@ -51,11 +64,11 @@ async function newGame(forceAiOff = false) {
 
         renderBoard(data.board);
         rematchBtn.style.display = 'none';
-        statusText.textContent = aiOn ? "Playing against AI..." : "Waiting for friend...";
+        statusText.textContent = aiOn ? "Playing against AI..." : "Click 'Invite Friend' to play with someone!";
         enableBoard();
         return true;
     } catch (e) {
-        statusText.textContent = "Server Error";
+        statusText.textContent = "❌ Server Error";
         console.error(e);
         return false;
     }
@@ -64,14 +77,19 @@ async function newGame(forceAiOff = false) {
 async function handleMove(r, c) {
     if (!gameId) return;
 
+    // Multiplayer mode via WebSocket
     if (playerRole) {
         if (!opponentJoined) {
-            statusText.textContent = "Waiting for friend...";
+            statusText.textContent = "⏳ Waiting for opponent to join...";
             return;
         }
-        if (playerRole !== currentTurn) return;
+        if (playerRole !== currentTurn) {
+            statusText.textContent = `It's ${currentTurn}'s turn!`;
+            return;
+        }
 
         if (stompClient && stompClient.connected) {
+            console.log("Sending move:", r, c);
             stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({
                 row: parseInt(r),
                 column: parseInt(c),
@@ -81,10 +99,11 @@ async function handleMove(r, c) {
         return;
     }
 
+    // Local/AI mode via REST API
     const res = await fetch(`${API_URL}/${gameId}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ row: r, column: c })
+        body: JSON.stringify({ row: r, column: c, player: null })
     });
     const data = await res.json();
     renderBoard(data.board);
@@ -92,17 +111,37 @@ async function handleMove(r, c) {
 }
 
 function updateUI(data) {
-    if (data.status.includes('WON') || data.status === 'DRAW') {
-        statusText.textContent = data.status.replace('_', ' ');
-        if (data.status.includes('WON')) playWinSound();
+    console.log("Updating UI with:", data);
+
+    if (data.status === 'X_WON' || data.status === 'O_WON' || data.status === 'DRAW') {
+        const statusMap = {
+            'X_WON': '🎉 X Wins!',
+            'O_WON': '🎉 O Wins!',
+            'DRAW': '🤝 Draw!'
+        };
+        statusText.textContent = statusMap[data.status];
+
+        if (data.status !== 'DRAW') {
+            playWinSound();
+        }
+
         disableBoard();
+
         if (playerRole) {
             rematchBtn.style.display = 'block';
             const readyCount = (data.playerXReady ? 1 : 0) + (data.playerOReady ? 1 : 0);
             rematchBtn.textContent = `Request Rematch (${readyCount}/2)`;
         }
     } else {
-        statusText.textContent = opponentJoined ? `${data.currentPlayer}'s turn` : "Waiting for friend...";
+        if (playerRole) {
+            if (opponentJoined) {
+                statusText.textContent = `${data.currentPlayer}'s turn`;
+            } else {
+                statusText.textContent = "⏳ Waiting for opponent to join...";
+            }
+        } else {
+            statusText.textContent = `${data.currentPlayer}'s turn`;
+        }
     }
 }
 
@@ -147,7 +186,7 @@ document.getElementById('inviteBtn').onclick = async function() {
     const originalText = btn.textContent;
 
     btn.textContent = "Generating...";
-    const success = await newGame(true);
+    const success = await newGame(true); // aiMode = false
 
     if (success && gameId) {
         playerRole = 'X';
@@ -158,11 +197,11 @@ document.getElementById('inviteBtn').onclick = async function() {
         window.history.pushState({}, '', link);
 
         copyToClipboard(link).then(() => {
-            alert("Invite link copied!");
+            alert("✅ Invite link copied! Share it with your friend.");
             btn.textContent = "Link Copied!";
             setTimeout(() => btn.textContent = originalText, 3000);
         }).catch(() => {
-            prompt("Could not auto-copy. Copy this link manually:", link);
+            prompt("Copy this link manually:", link);
             btn.textContent = originalText;
         });
 
@@ -183,7 +222,7 @@ document.getElementById('newGame').onclick = () => {
 };
 
 rematchBtn.onclick = () => {
-    if (stompClient) {
+    if (stompClient && stompClient.connected) {
         stompClient.send(`/app/rematch/${gameId}`, {}, JSON.stringify({ player: playerRole }));
     }
 };
@@ -199,6 +238,7 @@ window.onload = () => {
         playerRole = 'O';
         identityText.textContent = "YOU ARE PLAYER O";
         aiControl.style.display = 'none';
+        statusText.textContent = "Connecting...";
         connectWebSocket(id);
         enableBoard();
     }
