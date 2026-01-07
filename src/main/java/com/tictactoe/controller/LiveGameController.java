@@ -1,5 +1,6 @@
 package com.tictactoe.controller;
 
+import com.tictactoe.dto.ChatMessage;
 import com.tictactoe.dto.GameResponse;
 import com.tictactoe.dto.MoveRequest;
 import com.tictactoe.dto.JoinRequest;
@@ -7,6 +8,7 @@ import com.tictactoe.model.Game;
 import com.tictactoe.service.GameService;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
@@ -81,5 +83,12 @@ public class LiveGameController {
                 game.getStartingPlayer().toString()
         );
         messagingTemplate.convertAndSend("/topic/game/" + gameId, response);
+    }
+
+    @MessageMapping("/chat/{gameId}")
+    @SendTo("/topic/game/{gameId}/chat")
+    public ChatMessage handleChat(@DestinationVariable String gameId, ChatMessage message) {
+        message.setTimestamp(System.currentTimeMillis());
+        return message;
     }
 }
