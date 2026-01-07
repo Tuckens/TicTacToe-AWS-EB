@@ -5,6 +5,7 @@ import com.tictactoe.dto.GameResponse;
 import com.tictactoe.dto.MoveRequest;
 import com.tictactoe.dto.JoinRequest;
 import com.tictactoe.model.Game;
+import com.tictactoe.model.Player;
 import com.tictactoe.service.GameService;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -23,18 +24,27 @@ public class LiveGameController {
         this.messagingTemplate = messagingTemplate;
     }
 
-
     @MessageMapping("/join/{gameId}")
     public void handleJoin(@DestinationVariable String gameId, JoinRequest request) {
         Game game = gameService.getGame(gameId);
         if (game != null) {
-            if ("X".equals(request.getPlayer())) {
-                game.setPlayerXPresent(true);
-            } else if ("O".equals(request.getPlayer())) {
-                game.setPlayerOPresent(true);
-            }
+            String sessionId = request.getSessionId();
+            Player requestedPlayer = "X".equals(request.getPlayer()) ? Player.X : Player.O;
 
-            System.out.println("Player " + request.getPlayer() + " joined session: " + gameId);
+            // Check if this session can join as the player
+            if (game.canJoinAsPlayer(sessionId, requestedPlayer)) {
+                game.assignPlayer(sessionId, requestedPlayer);
+
+                if (requestedPlayer == Player.X) {
+                    game.setPlayerXPresent(true);
+                } else {
+                    game.setPlayerOPresent(true);
+                }
+
+                System.out.println("Player " + request.getPlayer() + " (Session: " + sessionId + ") joined session: " + gameId);
+            } else {
+                System.out.println("Session " + sessionId + " joined as spectator in game: " + gameId);
+            }
 
             broadcastState(gameId, game);
         }
@@ -44,15 +54,19 @@ public class LiveGameController {
     public void handleMove(@DestinationVariable String gameId, MoveRequest move) {
         Game game = gameService.getGame(gameId);
         if (game != null) {
-            // This calls public boolean makeMove(int row, int column, String playerSymbol)
-            boolean success = game.makeMove(move.getRow(), move.getColumn(), move.getPlayer());
+            String sessionId = move.getSessionId();
 
-            if (success) {
-                broadcastState(gameId, game);
+
+            if (!game.isSpectator(sessionId)) {
+                boolean success = game.makeMove(move.getRow(), move.getColumn(), move.getPlayer());
+                if (success) {
+                    broadcastState(gameId, game);
+                }
+            } else {
+                System.out.println("Spectator " + sessionId + " tried to make a move - blocked");
             }
         }
     }
-
 
     @MessageMapping("/rematch/{gameId}")
     public void handleRematch(@DestinationVariable String gameId, JoinRequest request) {
@@ -68,6 +82,12 @@ public class LiveGameController {
         }
     }
 
+    @MessageMapping("/chat/{gameId}")
+    @SendTo("/topic/game/{gameId}/chat")
+    public ChatMessage handleChat(@DestinationVariable String gameId, ChatMessage message) {
+        message.setTimestamp(System.currentTimeMillis());
+        return message;
+    }
 
     private void broadcastState(String gameId, Game game) {
         GameResponse response = new GameResponse(
@@ -83,12 +103,5 @@ public class LiveGameController {
                 game.getStartingPlayer().toString()
         );
         messagingTemplate.convertAndSend("/topic/game/" + gameId, response);
-    }
-
-    @MessageMapping("/chat/{gameId}")
-    @SendTo("/topic/game/{gameId}/chat")
-    public ChatMessage handleChat(@DestinationVariable String gameId, ChatMessage message) {
-        message.setTimestamp(System.currentTimeMillis());
-        return message;
     }
 }

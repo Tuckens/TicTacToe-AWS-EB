@@ -3,11 +3,9 @@ package com.tictactoe.dto;
 public class MoveRequest {
     private int row;
     private int column;
-    private String player; // This is the "symbol" (X or O)
+    private String player;
+    private String sessionId;
 
-    public MoveRequest() {}
-
-    // Getters and Setters
     public int getRow() { return row; }
     public void setRow(int row) { this.row = row; }
 
@@ -16,4 +14,7 @@ public class MoveRequest {
 
     public String getPlayer() { return player; }
     public void setPlayer(String player) { this.player = player; }
+
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 }

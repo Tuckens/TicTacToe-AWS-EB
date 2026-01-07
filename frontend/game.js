@@ -7,6 +7,9 @@ function playWinSound() {
     winSound.play().catch(() => console.log("Sound play blocked"));
 }
 
+// Generate unique session ID for this browser tab
+const sessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
+
 let gameId = null;
 let stompClient = null;
 let playerRole = null;
@@ -14,6 +17,7 @@ let opponentJoined = false;
 let currentTurn = 'X';
 let gameEnded = false;
 let rematchRequested = false;
+let isSpectator = false;
 
 const cells = document.querySelectorAll('.cell');
 const statusText = document.getElementById('status');
@@ -53,7 +57,10 @@ function connectWebSocket(id) {
             displayChatMessage(chatMsg);
         });
 
-        stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
+        stompClient.send(`/app/join/${id}`, {}, JSON.stringify({
+            player: playerRole,
+            sessionId: sessionId
+        }));
 
         chatContainer.style.display = 'block';
 
@@ -71,9 +78,16 @@ async function newGame(forceAiOff = false) {
         const data = await res.json();
         gameId = data.gameId;
 
-        opponentJoined = true;
+        // For local games, always set opponentJoined to true
+        if (!playerRole) {
+            opponentJoined = true; // Local game (AI or hot-seat)
+        } else {
+            opponentJoined = false; // Multiplayer - wait for opponent
+        }
+
         gameEnded = false;
         rematchRequested = false;
+        isSpectator = false;
 
         renderBoard(data.board);
         rematchBtn.style.display = 'none';
@@ -83,7 +97,7 @@ async function newGame(forceAiOff = false) {
         } else if (aiOn) {
             statusText.textContent = `${data.currentPlayer}'s turn`;
         } else {
-            statusText.textContent = `${data.currentPlayer}'s turn (Hot-seat mode)`;
+            statusText.textContent = `${data.currentPlayer}'s turn (Pass & Play)`;
         }
 
         enableBoard();
@@ -99,6 +113,11 @@ async function handleMove(r, c) {
     if (!gameId) return;
 
     if (playerRole) {
+        if (isSpectator) {
+            statusText.textContent = "👁️ You are spectating - cannot make moves";
+            return;
+        }
+
         if (!opponentJoined) {
             statusText.textContent = "⏳ Waiting for opponent to join...";
             return;
@@ -113,7 +132,8 @@ async function handleMove(r, c) {
             stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({
                 row: parseInt(r),
                 column: parseInt(c),
-                player: playerRole
+                player: playerRole,
+                sessionId: sessionId
             }));
         }
         return;
@@ -134,6 +154,13 @@ function updateUI(data) {
 
     const isGameOver = data.status === 'X_WON' || data.status === 'O_WON' || data.status === 'DRAW';
     const isGameInProgress = data.status === 'IN_PROGRESS';
+
+    // Check if we're a spec
+    if (playerRole && data.playerXPresent && data.playerOPresent && !opponentJoined) {
+        isSpectator = true;
+        identityText.textContent = "👁️ SPECTATOR MODE";
+        disableBoard();
+    }
 
     if (gameEnded && rematchRequested && isGameInProgress && !data.playerXReady && !data.playerOReady) {
         console.log("Rematch completed! Swapping roles...");
@@ -164,7 +191,7 @@ function updateUI(data) {
         disableBoard();
         gameEnded = true;
 
-        if (playerRole) {
+        if (playerRole && !isSpectator) {
             rematchBtn.style.display = 'block';
             const readyCount = (data.playerXReady ? 1 : 0) + (data.playerOReady ? 1 : 0);
             rematchBtn.textContent = `Request Rematch (${readyCount}/2)`;
@@ -173,7 +200,9 @@ function updateUI(data) {
         rematchBtn.style.display = 'none';
 
         if (playerRole) {
-            if (opponentJoined) {
+            if (isSpectator) {
+                statusText.textContent = `Spectating - ${data.currentPlayer}'s turn`;
+            } else if (opponentJoined) {
                 statusText.textContent = `${data.currentPlayer}'s turn`;
             } else {
                 statusText.textContent = "⏳ Waiting for opponent to join...";
@@ -182,7 +211,9 @@ function updateUI(data) {
             statusText.textContent = `${data.currentPlayer}'s turn`;
         }
 
-        enableBoard();
+        if (!isSpectator) {
+            enableBoard();
+        }
     }
 }
 
@@ -207,7 +238,7 @@ function sendChatMessage() {
     const message = chatInput.value.trim();
     if (message && stompClient && stompClient.connected) {
         stompClient.send(`/app/chat/${gameId}`, {}, JSON.stringify({
-            player: playerRole,
+            player: playerRole || 'Spectator',
             message: message
         }));
         chatInput.value = '';
@@ -220,7 +251,7 @@ function displayChatMessage(chatMsg) {
 
     const playerDiv = document.createElement('div');
     playerDiv.className = 'chat-player';
-    playerDiv.textContent = `Player ${chatMsg.player}:`;
+    playerDiv.textContent = `${chatMsg.player}:`;
 
     const textDiv = document.createElement('div');
     textDiv.className = 'chat-text';
@@ -293,11 +324,12 @@ document.getElementById('newGame').onclick = () => {
     window.history.pushState({}, '', window.location.pathname);
     gameEnded = false;
     rematchRequested = false;
+    isSpectator = false;
     newGame();
 };
 
 rematchBtn.onclick = () => {
-    if (stompClient && stompClient.connected) {
+    if (stompClient && stompClient.connected && !isSpectator) {
         rematchRequested = true;
         stompClient.send(`/app/rematch/${gameId}`, {}, JSON.stringify({ player: playerRole }));
     }
@@ -325,12 +357,13 @@ window.onload = () => {
         statusText.textContent = "Connecting...";
         gameEnded = false;
         rematchRequested = false;
+        isSpectator = false;
         connectWebSocket(id);
         enableBoard();
     }
 };
 
-// SIMPLE DRAG - NO BUGS
+// DRAG
 (function() {
     const header = document.getElementById('chatHeader');
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
