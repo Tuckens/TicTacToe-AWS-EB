@@ -9,17 +9,17 @@ public class Game {
     private final Player aiPlayer = Player.O;
     private final AIPlayer ai = new AIPlayer();
 
-    // Multiplayer Presence and Rematch
+
     private boolean playerXPresent = false;
     private boolean playerOPresent = false;
     private boolean playerXReady = false;
     private boolean playerOReady = false;
 
-    // Track player sessions for spectator mode
+
     private String playerXId = null;
     private String playerOId = null;
 
-    // Starting player tracking for side swapping
+
     private Player startingPlayer = Player.X;
 
     public Game() { this(false); }
@@ -41,12 +41,17 @@ public class Game {
         this.board = new Board();
         this.gameStatus = GameStatus.IN_PROGRESS;
 
-        // Swap starting player
+
         this.startingPlayer = (this.startingPlayer == Player.X) ? Player.O : Player.X;
         this.currentPlayer = this.startingPlayer;
 
+
         this.playerXReady = false;
         this.playerOReady = false;
+
+
+        this.playerXPresent = (this.playerXId != null);
+        this.playerOPresent = (this.playerOId != null);
     }
 
     public boolean canMove(String playerSymbol) {

@@ -100,28 +100,53 @@ async function newGame(forceAiOff = false) {
 }
 
 async function handleMove(r, c) {
-    if (!gameId || gameEnded) return;
+
+    if (!gameId || gameEnded) {
+        console.log("Move blocked: Game ended or not initialized");
+        return;
+    }
 
     if (playerRole) {
-        if (isSpectator || !opponentJoined || playerRole !== currentTurn) return;
+            console.log("Move blocked: You are a spectator");
+            return;
+        }
 
-        stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({
-            row: parseInt(r),
-            column: parseInt(c),
-            player: playerRole
-        }));
+        if (!opponentJoined) {
+            console.log("Move blocked: Waiting for opponent");
+            return;
+        }
+
+
+        if (playerRole !== currentTurn) {
+            console.log(`Move blocked: It is ${currentTurn}'s turn, you are ${playerRole}`);
+            return;
+        }
+
+        if (stompClient && stompClient.connected) {
+            stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({
+                row: parseInt(r),
+                column: parseInt(c),
+                player: playerRole
+            }));
+        }
     } else {
-        // Hotseat Move
+
         try {
             const res = await fetch(`${API_URL}/${gameId}/move`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ row: parseInt(r), column: parseInt(c), player: null })
+                body: JSON.stringify({
+                    row: parseInt(r),
+                    column: parseInt(c),
+                    player: null
+                })
             });
             const data = await res.json();
             renderBoard(data.board);
             updateUI(data);
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error("Hotseat move failed:", e);
+        }
     }
 }
 
@@ -129,21 +154,45 @@ function updateUI(data) {
     const isGameOver = data.status.endsWith('_WON') || data.status === 'DRAW';
     const isGameInProgress = data.status === 'IN_PROGRESS';
 
+
+    if (gameEnded && isGameInProgress) {
+        console.log("Rematch started! Resetting game state flags.");
+        gameEnded = false;
+        rematchRequested = false;
+
+        if (playerRole === 'X') {
+            opponentJoined = data.playerOPresent;
+        } else if (playerRole === 'O') {
+            opponentJoined = data.playerXPresent;
+        }
+    }
+
     if (isGameOver) {
         const statusMap = { 'X_WON': '🎉 X Wins!', 'O_WON': '🎉 O Wins!', 'DRAW': '🤝 Draw!' };
         statusText.textContent = statusMap[data.status];
         if (data.status !== 'DRAW') playWinSound();
         gameEnded = true;
+
         if (playerRole && !isSpectator) {
             rematchBtn.style.display = 'block';
-            rematchBtn.textContent = `Request Rematch (${(data.playerXReady ? 1 : 0) + (data.playerOReady ? 1 : 0)}/2)`;
+
+            const readyCount = (data.playerXReady ? 1 : 0) + (data.playerOReady ? 1 : 0);
+            rematchBtn.textContent = `Request Rematch (${readyCount}/2)`;
         }
     } else {
         rematchBtn.style.display = 'none';
+
         if (playerRole) {
-            statusText.textContent = isSpectator ? `Spectating - ${data.currentPlayer}'s turn` :
-                                     (opponentJoined ? `${data.currentPlayer}'s turn` : "⏳ Waiting for opponent...");
+            if (isSpectator) {
+                statusText.textContent = `Spectating - ${data.currentPlayer}'s turn`;
+            } else if (opponentJoined) {
+
+                statusText.textContent = (data.currentPlayer === playerRole) ? "Your Turn!" : `${data.currentPlayer}'s turn`;
+            } else {
+                statusText.textContent = "⏳ Waiting for opponent...";
+            }
         } else {
+
             statusText.textContent = `${data.currentPlayer}'s turn`;
         }
     }
@@ -182,6 +231,7 @@ document.getElementById('inviteBtn').onclick = async function() {
     const originalText = btn.textContent;
 
     btn.textContent = "Generating...";
+
 
     const success = await newGame(true);
 
