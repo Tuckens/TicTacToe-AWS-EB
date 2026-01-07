@@ -41,9 +41,21 @@ function connectWebSocket(id) {
             console.log("Received message:", message.body);
             const data = JSON.parse(message.body);
 
+
+            if (playerRole && data.playerXPresent && data.playerOPresent) {
+
+                if (!opponentJoined) {
+
+                    isSpectator = true;
+                    identityText.textContent = "👁️ SPECTATOR MODE";
+                    playerRole = 'Spectator';
+                    disableBoard();
+                }
+            }
+
             if (playerRole === 'X') {
                 opponentJoined = data.playerOPresent;
-            } else {
+            } else if (playerRole === 'O') {
                 opponentJoined = data.playerXPresent;
             }
 
@@ -155,12 +167,6 @@ function updateUI(data) {
     const isGameOver = data.status === 'X_WON' || data.status === 'O_WON' || data.status === 'DRAW';
     const isGameInProgress = data.status === 'IN_PROGRESS';
 
-    // Check if we're a spec
-    if (playerRole && data.playerXPresent && data.playerOPresent && !opponentJoined) {
-        isSpectator = true;
-        identityText.textContent = "👁️ SPECTATOR MODE";
-        disableBoard();
-    }
 
     if (gameEnded && rematchRequested && isGameInProgress && !data.playerXReady && !data.playerOReady) {
         console.log("Rematch completed! Swapping roles...");
@@ -237,8 +243,9 @@ function disableBoard() {
 function sendChatMessage() {
     const message = chatInput.value.trim();
     if (message && stompClient && stompClient.connected) {
+        const displayName = isSpectator ? 'Spectator' : `Player ${playerRole}`;
         stompClient.send(`/app/chat/${gameId}`, {}, JSON.stringify({
-            player: playerRole || 'Spectator',
+            player: displayName,
             message: message
         }));
         chatInput.value = '';
@@ -352,14 +359,14 @@ window.onload = () => {
     if (id) {
         gameId = id;
         playerRole = 'O';
-        identityText.textContent = "YOU ARE PLAYER O";
+        identityText.textContent = "Connecting as Player O...";
         aiControl.style.display = 'none';
         statusText.textContent = "Connecting...";
         gameEnded = false;
         rematchRequested = false;
         isSpectator = false;
         connectWebSocket(id);
-        enableBoard();
+
     }
 };
 
