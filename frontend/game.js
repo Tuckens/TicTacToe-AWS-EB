@@ -374,10 +374,8 @@ window.onload = async () => {
         gameId = id;
 
         try {
-
             const response = await fetch(`${API_URL}/${id}/state`);
             const currentState = await response.json();
-
 
             if (currentState.playerOPresent) {
                 wasOAlreadyPresent = true;
@@ -390,7 +388,7 @@ window.onload = async () => {
                 identityText.textContent = "YOU ARE PLAYER O";
             }
         } catch (e) {
-            console.log("Could not pre-fetch game state, defaulting to Player O");
+            console.log("Could not pre-fetch game state");
             playerRole = 'O';
         }
 
