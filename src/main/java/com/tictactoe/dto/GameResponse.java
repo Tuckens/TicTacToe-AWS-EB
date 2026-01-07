@@ -14,11 +14,11 @@ public class GameResponse {
     private boolean playerOPresent;
     private boolean playerXReady;
     private boolean playerOReady;
-
+    private String startingPlayer;
 
     public GameResponse(String gameId, char[][] board, GameStatus status, String currentPlayer,
                         String error, boolean playerXPresent, boolean playerOPresent,
-                        boolean playerXReady, boolean playerOReady) {
+                        boolean playerXReady, boolean playerOReady, String startingPlayer) {
         this.gameId = gameId;
         this.board = board;
         this.status = status;
@@ -28,6 +28,7 @@ public class GameResponse {
         this.playerOPresent = playerOPresent;
         this.playerXReady = playerXReady;
         this.playerOReady = playerOReady;
+        this.startingPlayer = startingPlayer;
     }
 
     // Getters
@@ -40,4 +41,5 @@ public class GameResponse {
     public boolean isPlayerOPresent() { return playerOPresent; }
     public boolean isPlayerXReady() { return playerXReady; }
     public boolean isPlayerOReady() { return playerOReady; }
+    public String getStartingPlayer() {return startingPlayer; }
 }

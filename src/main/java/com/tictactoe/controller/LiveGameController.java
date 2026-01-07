@@ -77,7 +77,8 @@ public class LiveGameController {
                 game.isPlayerXPresent(),
                 game.isPlayerOPresent(),
                 game.isPlayerXReady(),
-                game.isPlayerOReady()
+                game.isPlayerOReady(),
+                game.getStartingPlayer().toString()
         );
         messagingTemplate.convertAndSend("/topic/game/" + gameId, response);
     }

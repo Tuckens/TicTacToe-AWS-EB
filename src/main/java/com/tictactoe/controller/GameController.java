@@ -63,7 +63,8 @@ public class GameController {
                 game.isPlayerXPresent(),
                 game.isPlayerOPresent(),
                 game.isPlayerXReady(),
-                game.isPlayerOReady()
+                game.isPlayerOReady(),
+                game.getStartingPlayer().toString()
         );
     }
 }

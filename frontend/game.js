@@ -12,6 +12,8 @@ let stompClient = null;
 let playerRole = null;
 let opponentJoined = false;
 let currentTurn = 'X';
+let gameEnded = false; // Track if game just ended
+let rematchRequested = false; // Track if we requested rematch
 
 const cells = document.querySelectorAll('.cell');
 const statusText = document.getElementById('status');
@@ -31,7 +33,7 @@ function connectWebSocket(id) {
             console.log("Received message:", message.body);
             const data = JSON.parse(message.body);
 
-            // Update opponent joined status
+
             if (playerRole === 'X') {
                 opponentJoined = data.playerOPresent;
             } else {
@@ -43,7 +45,7 @@ function connectWebSocket(id) {
             updateUI(data);
         });
 
-        // Tell server we joined
+
         stompClient.send(`/app/join/${id}`, {}, JSON.stringify({ player: playerRole }));
 
     }, (error) => {
@@ -61,6 +63,8 @@ async function newGame(forceAiOff = false) {
         gameId = data.gameId;
 
         opponentJoined = aiOn;
+        gameEnded = false;
+        rematchRequested = false;
 
         renderBoard(data.board);
         rematchBtn.style.display = 'none';
@@ -77,7 +81,7 @@ async function newGame(forceAiOff = false) {
 async function handleMove(r, c) {
     if (!gameId) return;
 
-    // Multiplayer mode via WebSocket
+
     if (playerRole) {
         if (!opponentJoined) {
             statusText.textContent = "⏳ Waiting for opponent to join...";
@@ -89,7 +93,7 @@ async function handleMove(r, c) {
         }
 
         if (stompClient && stompClient.connected) {
-            console.log("Sending move:", r, c);
+            console.log("Sending move:", r, c, "as player:", playerRole);
             stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({
                 row: parseInt(r),
                 column: parseInt(c),
@@ -99,7 +103,7 @@ async function handleMove(r, c) {
         return;
     }
 
-    // Local/AI mode via REST API
+
     const res = await fetch(`${API_URL}/${gameId}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -113,9 +117,13 @@ async function handleMove(r, c) {
 function updateUI(data) {
     console.log("Updating UI with:", data);
 
-    // Handle role swap after rematch
-    if (data.status === 'IN_PROGRESS' && data.playerXReady === false && data.playerOReady === false) {
-        // Fresh game after rematch - swap roles
+    const isGameOver = data.status === 'X_WON' || data.status === 'O_WON' || data.status === 'DRAW';
+    const isGameInProgress = data.status === 'IN_PROGRESS';
+
+
+    if (gameEnded && rematchRequested && isGameInProgress && !data.playerXReady && !data.playerOReady) {
+        console.log("Rematch completed! Swapping roles...");
+
         if (playerRole === 'X') {
             playerRole = 'O';
             identityText.textContent = "YOU ARE PLAYER O";
@@ -123,9 +131,11 @@ function updateUI(data) {
             playerRole = 'X';
             identityText.textContent = "YOU ARE PLAYER X";
         }
+        gameEnded = false;
+        rematchRequested = false;
     }
 
-    if (data.status === 'X_WON' || data.status === 'O_WON' || data.status === 'DRAW') {
+    if (isGameOver) {
         const statusMap = {
             'X_WON': '🎉 X Wins!',
             'O_WON': '🎉 O Wins!',
@@ -138,13 +148,14 @@ function updateUI(data) {
         }
 
         disableBoard();
+        gameEnded = true;
 
         if (playerRole) {
             rematchBtn.style.display = 'block';
             const readyCount = (data.playerXReady ? 1 : 0) + (data.playerOReady ? 1 : 0);
             rematchBtn.textContent = `Request Rematch (${readyCount}/2)`;
         }
-    } else {
+    } else if (isGameInProgress) {
         rematchBtn.style.display = 'none';
 
         if (playerRole) {
@@ -230,15 +241,18 @@ document.getElementById('inviteBtn').onclick = async function() {
 
 document.getElementById('newGame').onclick = () => {
     playerRole = null;
-    opponentJoined = document.getElementById('aiToggle').checked;
+    opponentJoined = true;
     identityText.textContent = "";
     aiControl.style.display = 'flex';
     window.history.pushState({}, '', window.location.pathname);
+    gameEnded = false;
+    rematchRequested = false;
     newGame();
 };
 
 rematchBtn.onclick = () => {
     if (stompClient && stompClient.connected) {
+        rematchRequested = true;
         stompClient.send(`/app/rematch/${gameId}`, {}, JSON.stringify({ player: playerRole }));
     }
 };
@@ -255,6 +269,8 @@ window.onload = () => {
         identityText.textContent = "YOU ARE PLAYER O";
         aiControl.style.display = 'none';
         statusText.textContent = "Connecting...";
+        gameEnded = false;
+        rematchRequested = false;
         connectWebSocket(id);
         enableBoard();
     }

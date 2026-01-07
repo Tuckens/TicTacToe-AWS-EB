@@ -6,6 +6,7 @@ public class Game {
     private Board board = new Board();
     private Player currentPlayer = Player.X;
     private GameStatus gameStatus = GameStatus.IN_PROGRESS;
+    private Player startingPlayer = Player.X;
 
 
     private boolean isAIMode = false;
@@ -36,7 +37,11 @@ public class Game {
     public void resetBoard() {
         this.board = new Board();
         this.gameStatus = GameStatus.IN_PROGRESS;
-        this.currentPlayer = Player.X;
+
+
+        this.startingPlayer = (this.startingPlayer == Player.X) ? Player.O : Player.X;
+        this.currentPlayer = this.startingPlayer;
+
         this.playerXReady = false;
         this.playerOReady = false;
     }
@@ -104,6 +109,8 @@ public class Game {
         return true;
     }
 
+
+
     private void setWinner(char p) {
         gameStatus = (p == 'X') ? GameStatus.X_WON : GameStatus.O_WON;
     }
@@ -134,4 +141,5 @@ public class Game {
     public void setPlayerXReady(boolean ready) { this.playerXReady = ready; }
     public boolean isPlayerOReady() { return playerOReady; }
     public void setPlayerOReady(boolean ready) { this.playerOReady = ready; }
+    public Player getStartingPlayer() { return startingPlayer; }
 }
