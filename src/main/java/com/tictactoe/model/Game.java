@@ -34,7 +34,7 @@ public class Game {
 
     public boolean isReadyToStart() {
         if (this.isAIMode) return true;
-        return this.playerXPresent && this.playerOPresent;
+        return (playerXPresent && playerOPresent) || (!playerXPresent && !playerOPresent);
     }
 
     public void resetBoard() {
@@ -51,6 +51,8 @@ public class Game {
 
     public boolean canMove(String playerSymbol) {
         if (isAIMode) return true;
+        if (playerSymbol == null) return true;
+
         return isReadyToStart() && currentPlayer.toString().equals(playerSymbol);
     }
 

@@ -131,37 +131,36 @@ async function newGame(forceAiOff = false) {
 async function handleMove(r, c) {
     if (!gameId) return;
 
-        if (isSpectator) {
-            statusText.textContent = "👁️ Spectator Mode: You cannot move.";
-            return;
-        }
 
     if (playerRole) {
-        if (isSpectator) {
-            statusText.textContent = "👁️ You are spectating - cannot make moves";
-            return;
-        }
-
-        if (!opponentJoined) {
-            statusText.textContent = "⏳ Waiting for opponent to join...";
-            return;
-        }
-        if (playerRole !== currentTurn) {
-            statusText.textContent = `It's ${currentTurn}'s turn!`;
-            return;
-        }
+        if (isSpectator) return;
+        if (!opponentJoined) return;
+        if (playerRole !== currentTurn) return;
 
         if (stompClient && stompClient.connected) {
-            console.log("Sending move:", r, c, "as player:", playerRole);
             stompClient.send(`/app/move/${gameId}`, {}, JSON.stringify({
                 row: parseInt(r),
                 column: parseInt(c),
-                player: playerRole,
-                sessionId: sessionId
+                player: playerRole
             }));
         }
         return;
     }
+
+
+    const res = await fetch(`${API_URL}/${gameId}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            row: r,
+            column: c,
+            player: null
+        })
+    });
+    const data = await res.json();
+    renderBoard(data.board);
+    updateUI(data);
+}
 
     const res = await fetch(`${API_URL}/${gameId}/move`, {
         method: 'POST',
