@@ -78,7 +78,8 @@ public class Game {
     }
 
     public boolean makeMove(int row, int column, String playerSymbol) {
-        if (!isReadyToStart()) {
+
+        if (playerSymbol != null && !isReadyToStart()) {
             return false;
         }
 
@@ -97,6 +98,7 @@ public class Game {
         }
         return true;
     }
+
 
     private void processTurn() {
         checkWinner();
