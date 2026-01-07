@@ -5,6 +5,7 @@ import com.tictactoe.dto.MoveRequest;
 import com.tictactoe.model.Game;
 import com.tictactoe.service.GameService;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -66,5 +67,14 @@ public class GameController {
                 game.isPlayerOReady(),
                 game.getStartingPlayer().toString()
         );
+    }
+
+    @GetMapping("/{gameId}/state")
+    public ResponseEntity<Game> getGameState(@PathVariable String gameId) {
+        Game game = gameService.getGame(gameId);
+        if (game == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(game);
     }
 }
