@@ -33,30 +33,46 @@ function connectWebSocket(id) {
     const socket = new SockJS(`${BASE_URL}/ws-tictactoe`);
     stompClient = Stomp.over(socket);
 
+    let firstUpdate = true;
+
     stompClient.connect({}, () => {
         console.log("WebSocket connected!");
-        statusText.textContent = "Connected! Waiting for opponent...";
+        statusText.textContent = "Connected!";
 
         stompClient.subscribe(`/topic/game/${id}`, (message) => {
             console.log("Received message:", message.body);
             const data = JSON.parse(message.body);
 
+            if (firstUpdate) {
+                firstUpdate = false;
 
-            if (playerRole && data.playerXPresent && data.playerOPresent) {
 
-                if (!opponentJoined) {
-
-                    isSpectator = true;
-                    identityText.textContent = "👁️ SPECTATOR MODE";
-                    playerRole = 'Spectator';
-                    disableBoard();
+                if (playerRole === 'X') {
+                    identityText.textContent = "YOU ARE PLAYER X";
+                } else if (playerRole === 'O') {
+                    identityText.textContent = "YOU ARE PLAYER O";
                 }
+
+
+                setTimeout(() => {
+                    if (playerRole === 'O' && !opponentJoined) {
+
+                        console.log("O slot was already filled - becoming spectator");
+                        isSpectator = true;
+                        playerRole = 'Spectator';
+                        identityText.textContent = "👁️ SPECTATOR MODE";
+                        statusText.textContent = "Both player slots are full - spectating";
+                        disableBoard();
+                    }
+                }, 300);
             }
 
-            if (playerRole === 'X') {
-                opponentJoined = data.playerOPresent;
-            } else if (playerRole === 'O') {
-                opponentJoined = data.playerXPresent;
+            if (!isSpectator) {
+                if (playerRole === 'X') {
+                    opponentJoined = data.playerOPresent;
+                } else if (playerRole === 'O') {
+                    opponentJoined = data.playerXPresent;
+                }
             }
 
             currentTurn = data.currentPlayer;
@@ -70,7 +86,7 @@ function connectWebSocket(id) {
         });
 
         stompClient.send(`/app/join/${id}`, {}, JSON.stringify({
-            player: playerRole,
+            player: playerRole === 'Spectator' ? 'O' : playerRole,
             sessionId: sessionId
         }));
 
@@ -81,7 +97,6 @@ function connectWebSocket(id) {
         statusText.textContent = "❌ Connection Error. Try refreshing.";
     });
 }
-
 async function newGame(forceAiOff = false) {
     const aiOn = forceAiOff ? false : document.getElementById('aiToggle').checked;
     try {
@@ -254,7 +269,11 @@ function sendChatMessage() {
 
 function displayChatMessage(chatMsg) {
     const msgDiv = document.createElement('div');
-    msgDiv.className = chatMsg.player === playerRole ? 'chat-message own' : 'chat-message';
+
+    const isOwnMessage = (isSpectator && chatMsg.player === 'Spectator') ||
+                         (!isSpectator && chatMsg.player === `Player ${playerRole}`);
+
+    msgDiv.className = isOwnMessage ? 'chat-message own' : 'chat-message';
 
     const playerDiv = document.createElement('div');
     playerDiv.className = 'chat-player';
